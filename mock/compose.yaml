@@ -1,0 +1,57 @@
+services:
+  node1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    hostname: node1
+    ports:
+      - "127.0.0.1:2201:22"
+    volumes:
+      - ./keys/gateway/id_ed25519.pub:/run/keys/authorized_key.pub:ro
+      - ./keys/cluster/id_ed25519:/run/keys/cluster_key:ro
+      - node1_data:/data
+    networks:
+      - cluster
+
+  node2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    hostname: node2
+    volumes:
+      - ./keys/cluster/id_ed25519.pub:/run/keys/authorized_key.pub:ro
+      - node2_data:/data
+    networks:
+      - cluster
+
+  node3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    hostname: node3
+    volumes:
+      - ./keys/cluster/id_ed25519.pub:/run/keys/authorized_key.pub:ro
+      - node3_data:/data
+    networks:
+      - cluster
+
+  node4:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    hostname: node4
+    volumes:
+      - ./keys/cluster/id_ed25519.pub:/run/keys/authorized_key.pub:ro
+      - node4_data:/data
+    networks:
+      - cluster
+
+networks:
+  cluster:
+    driver: bridge
+
+volumes:
+  node1_data:
+  node2_data:
+  node3_data:
+  node4_data:
