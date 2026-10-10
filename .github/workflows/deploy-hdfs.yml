@@ -1,0 +1,54 @@
+name: autodeploy-hdfs
+
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: team-14
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        runs-on: ubuntu-24.04
+        timeout-minutes: 60
+
+        steps:
+            - name: скачать репо
+              uses: actions/checkout@v7
+              with:
+                persist-credentials: false
+            
+            - name: проверка правильности deploy.sh
+              run: bash -n hw_1/deploy.sh
+            
+            - name: настройка подключения 
+              env:
+                PRIVATE_KEY: ${{ secrets.SSH_PRIVATE }}
+                KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+              run: |
+                test -n "$PRIVATE_KEY"
+                test -n "$KNOWN_HOSTS"
+                mkdir -p "$HOME/.ssh"
+                chmod 700 "$HOME/.ssh"
+                printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
+                printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+                chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
+            
+            - name: копируем деплой на edge ноду
+              run: |
+                scp -i "$HOME/.ssh/private_key"  \
+                -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                -o ConnectTimeout=10 \
+                hw_1/deploy.sh team@171.22.72.225:hdfs-deploy.sh
+            
+            - name: деплой на edge ноде
+              run: |
+                ssh -i "$HOME/.ssh/private_key" \
+                -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                -o ConnectTimeout=10 -o ServerAliveInterval=60 \
+                -o ServerAliveCountMax=6 \
+                team@171.22.72.225 \
+                'bash "$HOME/hdfs-deploy.sh"'

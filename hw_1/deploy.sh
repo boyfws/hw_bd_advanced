@@ -18,7 +18,7 @@ NODES=(
 )
 
 #Тут проверочка что мы деплоимся на эдж ноде
-if [[ "$(hostname -s)" != "$EDGE_NODE"]]; then
+if [[ "$(hostname -s)" != "$EDGE_NODE" ]]; then
     echo "запускай скрипт на $EDGE_NODE" >&2
     exit 1
 fi
@@ -97,7 +97,7 @@ for node in "${NODES[@]}"; do
             curl -fL --retry 10 \
             "https://downloads.apache.org/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz" \
             -o "$archive"
-            printf '%s %s\n' "#HADOOP_SHA512" "$archive" | sha512sum -c -
+            printf '%s  %s\n' "$HADOOP_SHA512" "$archive" | sha512sum -c -
             tar -xzf "$archive" -C "$temp_d"
             mv "$temp_d/hadoop-$HADOOP_VERSION" "$HADOOP_HOME"
         fi
@@ -120,7 +120,7 @@ for node in "${NODES[@]}"; do
         *) echo "неизвестаня нода $node">&2; exit 1 ;;
     esac
     echo "настраиваем hadoop на $node"
-    func_on_node "$node" <<'END'
+    func_on_node "$node" <<END
     set -euo pipefail
     mkdir -p "$HDFS_DIR/name" "$HDFS_DIR/data" "$HDFS_DIR/checkpoint" "$HDFS_DIR/tmp" "$HDFS_DIR/logs" "$HDFS_DIR/pids"
     cat > "$HADOOP_HOME/etc/hadoop/hadoop-env.sh" <<'DOG'
@@ -160,18 +160,120 @@ DOGGY
             <value>file://$HDFS_DIR/checkpoint</value>
         </property>
         <property>
-            <name></name>
-            <value></value>
+            <name>dfs.namenode.rpc-address</name>
+            <value>$NAMENODE_IP:8020</value>
         </property>
         <property>
-            <name></name>
-            <value></value>
+            <name>dfs.namenode.http-address</name>
+            <value>$NAMENODE_IP:9870</value>
+        </property>
+        <property>
+            <name>dfs.namenode.secondary.http-address</name>
+            <value>$NAMENODE_IP:9868</value>
+        </property>
+        <property>
+            <name>dfs.datanode.address</name>
+            <value>$node_ip:9866</value>
+        </property>
+        <property>
+            <name>dfs.datanode.http.address</name>
+            <value>$node_ip:9864</value>
+        </property>
+        <property>
+            <name>dfs.datanode.ipc.address</name>
+            <value>$node_ip:9867</value>
+        </property>
+        <property>
+            <name>dfs.namenode.checkpoint.period</name>
+            <value>60</value>
         </property>
     </configuration>
 DOGGIK
-
-
 END
 done
+
+
+
+
+namenode_status="$(func_on_node "$NAMENODE" <<HELLO
+    set -euo pipefail
+
+    if [[ -f "$HDFS_DIR/name/current/VERSION" ]]; then
+        echo "initialized"
+    else
+        echo "new"
+    fi
+HELLO
+)"
+
+if [[ "$namenode_status" == "new" ]]; then
+    for node in "${NODES[@]}"; do
+        func_on_node "$node" <<'BYE'
+            set -euo pipefail
+
+            for dir in "$HOME/hdfs/name" "$HOME/hdfs/data" "$HOME/hdfs/checkpoint"; do
+                entry="$(find "$dir" -mindepth 1 -maxdepth 1 -print -quit)"
+
+                if [[ -n "$entry" ]]; then
+                    echo "namenode не инициализирован, но $dir непуст. что-то не так" >&2
+                    exit 1
+                fi
+            done
+BYE
+    done
+
+    func_on_node "$NAMENODE" <<BYEBYE
+    set -euo pipefail
+    "$HADOOP_HOME/bin/hdfs" namenode -format -nonInteractive
+BYEBYE
+fi
+
+
+#Теперь запускаем демоны
+daemons_restart() {
+    local node="$1"
+    local daemon="$2"
+
+    echo "перезапуск $daemon на $node"
+    func_on_node "$node" <<ENDIKI
+        set -euo pipefail
+        "$HADOOP_HOME/bin/hdfs" --daemon stop "$daemon"
+        "$HADOOP_HOME/bin/hdfs" --daemon start "$daemon" 
+ENDIKI
+}
+
+daemons_restart "$NAMENODE" "namenode"
+timeout 150 "$HADOOP_HOME/bin/hdfs" dfsadmin -safemode get
+
+for node in "${DATANODES[@]}"; do
+    daemons_restart "$node" "datanode"
+done
+
+daemons_restart "$NAMENODE" "secondarynamenode"
+
+
+assert_ok=false
+
+for i in {1..10}; do
+    result="$(timeout 20 "$HADOOP_HOME/bin/hdfs" dfsadmin -report -live -dead)"
+    if [[ "$result" == *"Live datanodes (3):"* && "$result" == *"Dead datanodes (0):"* ]]; then
+        assert_ok=true
+        break
+    fi
+    echo "ждем подтверждения жизнеспособности всех 3 датанод, попытка $i"
+    sleep 5
+done
+
+printf "%s\n" "$result"
+
+if [[ "$assert_ok" != true ]]; then
+    echo "не все датаноды живы" >&2
+    exit 1
+fi
+
+echo "hadoop успешно развернут и работает"
+
+
+
 
 
