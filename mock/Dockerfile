@@ -3,7 +3,7 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
         openssh-server \
         sudo \
         python3 \
@@ -14,20 +14,25 @@ RUN apt-get update && \
         rsync \
         iproute2 \
         iputils-ping \
-        procps && \
+        procps \
+        ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Пользователь, под которым будем работать как на реальных VM
+# Пользователь как на реальных VM
 RUN useradd \
         --create-home \
         --shell /bin/bash \
-        student && \
-    echo "student ALL=(ALL) NOPASSWD:ALL" \
-        > /etc/sudoers.d/student && \
-    chmod 0440 /etc/sudoers.d/student
+        team && \
+    echo "team ALL=(ALL) NOPASSWD:ALL" \
+        > /etc/sudoers.d/team && \
+    chmod 0440 /etc/sudoers.d/team
 
-# sshd требует эту директорию
-RUN mkdir -p /run/sshd
+# Настройка SSH
+RUN mkdir -p /run/sshd && \
+    printf '%s\n' \
+        'PasswordAuthentication no' \
+        'PermitRootLogin no' \
+        > /etc/ssh/sshd_config.d/99-mock.conf
 
 COPY entrypoint.sh /entrypoint.sh
 

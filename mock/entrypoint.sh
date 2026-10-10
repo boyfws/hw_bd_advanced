@@ -2,39 +2,39 @@
 
 set -euo pipefail
 
-USER_NAME="student"
+USER_NAME="team"
 USER_HOME="/home/${USER_NAME}"
+SSH_DIR="${USER_HOME}/.ssh"
 
-
+# Генерация SSH host keys
 ssh-keygen -A
 
+# Создание директории SSH
+mkdir -p "${SSH_DIR}"
+chmod 700 "${SSH_DIR}"
 
-mkdir -p "${USER_HOME}/.ssh"
-
-chmod 700 "${USER_HOME}/.ssh"
-
-
-if [ ! -f /run/keys/authorized_key.pub ]; then
-    echo "ERROR: /run/keys/authorized_key.pub not found"
+# Публичный ключ для входящих подключений
+if [ ! -s /run/keys/authorized_key.pub ]; then
+    echo "ERROR: /run/keys/authorized_key.pub not found" >&2
     exit 1
 fi
 
 cp /run/keys/authorized_key.pub \
-   "${USER_HOME}/.ssh/authorized_keys"
+    "${SSH_DIR}/authorized_keys"
 
-chmod 600 "${USER_HOME}/.ssh/authorized_keys"
+chmod 600 "${SSH_DIR}/authorized_keys"
 
-
+# Приватный ключ для перехода с edge
+# на внутренние узлы
 if [ -f /run/keys/cluster_key ]; then
     cp /run/keys/cluster_key \
-       "${USER_HOME}/.ssh/id_ed25519"
+        "${SSH_DIR}/team_internal"
 
-    chmod 600 "${USER_HOME}/.ssh/id_ed25519"
+    chmod 600 "${SSH_DIR}/team_internal"
 fi
 
+# Владелец SSH-файлов
+chown -R "${USER_NAME}:${USER_NAME}" "${SSH_DIR}"
 
-chown -R "${USER_NAME}:${USER_NAME}" \
-    "${USER_HOME}/.ssh"
-
-
+# Запуск SSH-сервера
 exec /usr/sbin/sshd -D -e

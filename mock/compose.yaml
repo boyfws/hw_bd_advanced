@@ -1,57 +1,71 @@
+x-node: &node
+  build:
+    context: .
+    dockerfile: Dockerfile
+  init: true
+  restart: unless-stopped
+
 services:
-  node1:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    hostname: node1
+  edge:
+    <<: *node
+    hostname: team-14-en
     ports:
       - "127.0.0.1:2201:22"
     volumes:
       - ./keys/gateway/id_ed25519.pub:/run/keys/authorized_key.pub:ro
       - ./keys/cluster/id_ed25519:/run/keys/cluster_key:ro
-      - node1_data:/data
+      - edge_data:/data
     networks:
-      - cluster
+      cluster:
+        ipv4_address: 10.14.0.10
+        aliases:
+          - team-14-en
 
-  node2:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    hostname: node2
+  namenode:
+    <<: *node
+    hostname: team-14-nn
     volumes:
       - ./keys/cluster/id_ed25519.pub:/run/keys/authorized_key.pub:ro
-      - node2_data:/data
+      - namenode_data:/data
     networks:
-      - cluster
+      cluster:
+        ipv4_address: 10.14.0.11
+        aliases:
+          - team-14-nn
 
-  node3:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    hostname: node3
+  datanode0:
+    <<: *node
+    hostname: team-14-00
     volumes:
       - ./keys/cluster/id_ed25519.pub:/run/keys/authorized_key.pub:ro
-      - node3_data:/data
+      - datanode0_data:/data
     networks:
-      - cluster
+      cluster:
+        ipv4_address: 10.14.0.12
+        aliases:
+          - team-14-00
 
-  node4:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    hostname: node4
+  datanode1:
+    <<: *node
+    hostname: team-14-01
     volumes:
       - ./keys/cluster/id_ed25519.pub:/run/keys/authorized_key.pub:ro
-      - node4_data:/data
+      - datanode1_data:/data
     networks:
-      - cluster
+      cluster:
+        ipv4_address: 10.14.0.13
+        aliases:
+          - team-14-01
 
 networks:
   cluster:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.14.0.0/24
 
 volumes:
-  node1_data:
-  node2_data:
-  node3_data:
-  node4_data:
+  edge_data:
+  namenode_data:
+  datanode0_data:
+  datanode1_data:
