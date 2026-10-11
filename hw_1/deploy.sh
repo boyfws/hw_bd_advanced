@@ -164,10 +164,6 @@ DOGGY
             <value>$NAMENODE_IP:8020</value>
         </property>
         <property>
-            <name>dfs.namenode.rpc-bind-host</name>
-            <value>$NAMENODE_IP</value>
-        </property>
-        <property>
             <name>dfs.namenode.http-address</name>
             <value>$NAMENODE_IP:9870</value>
         </property>
