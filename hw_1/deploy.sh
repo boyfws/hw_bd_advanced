@@ -243,7 +243,20 @@ ENDIKI
 }
 
 daemons_restart "$NAMENODE" "namenode"
-timeout 150 "$HADOOP_HOME/bin/hdfs" dfsadmin -safemode get
+
+if ! timeout 300 bash -c '
+    until "$1/bin/hdfs" dfsadmin -safemode get >/dev/null 2>&1; do
+        echo "ждём ответа namenode"
+        sleep 3
+    done
+' _ "$HADOOP_HOME"; then
+    echo "namenode не стал доступен за 300 секунд. логи:" >&2
+    func_on_node "$NAMENODE" <<'KONEC'
+        tail -n 80 "$HOME"/hdfs/logs/*-namenode-*.log
+KONEC
+
+    exit 1
+fi
 
 for node in "${DATANODES[@]}"; do
     daemons_restart "$node" "datanode"
@@ -255,8 +268,7 @@ daemons_restart "$NAMENODE" "secondarynamenode"
 assert_ok=false
 
 for i in {1..10}; do
-    result="$(timeout 20 "$HADOOP_HOME/bin/hdfs" dfsadmin -report -live -dead)"
-    if [[ "$result" == *"Live datanodes (3):"* && "$result" == *"Dead datanodes (0):"* ]]; then
+    if result="$(timeout 20 "$HADOOP_HOME/bin/hdfs" dfsadmin -report -live -dead)" && [[ "$result" == *"Live datanodes (3):"* && "$result" == *"Dead datanodes (0):"* ]]; then
         assert_ok=true
         break
     fi
