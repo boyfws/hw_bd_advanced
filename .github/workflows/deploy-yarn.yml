@@ -1,0 +1,97 @@
+name: autodeploy-yarn
+
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: team-14
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        runs-on: ubuntu-24.04
+        timeout-minutes: 60
+
+        steps:
+            - name: скачать репо
+              uses: actions/checkout@v7
+              with:
+                persist-credentials: false
+            
+            - name: проверка правильности deploy.sh
+              run: bash -n hw_2/deploy.sh
+            
+            - name: настройка подключения 
+              env:
+                PRIVATE_KEY: ${{ secrets.SSH_PRIVATE }}
+                KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+              run: |
+                test -n "$PRIVATE_KEY"
+                test -n "$KNOWN_HOSTS"
+                mkdir -p "$HOME/.ssh"
+                chmod 700 "$HOME/.ssh"
+                printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
+                printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+                chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
+            
+            
+            - name: Проверить приватный ключ
+              run: |
+                ssh-keygen -y -P "" -f "$HOME/.ssh/private_key" >/dev/null
+                echo "openssh прочитал приватный ключ"
+
+
+            - name: копируем деплой на edge ноду
+              run: |
+                scp -i "$HOME/.ssh/private_key"  \
+                -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                -o ConnectTimeout=10 \
+                hw_2/deploy.sh team@171.22.72.225:yarn-deploy.sh
+            
+            - name: деплой на edge ноде
+              run: |
+                ssh -i "$HOME/.ssh/private_key" \
+                -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                -o ConnectTimeout=10 -o ServerAliveInterval=60 \
+                -o ServerAliveCountMax=6 \
+                team@171.22.72.225 \
+                'bash "$HOME/yarn-deploy.sh"'
+            
+            - name: проверяем веб-интерфейсы через ssh-туннель
+              run: |
+                set -euo pipefail
+                ssh -i "$HOME/.ssh/private_key" \
+                  -o BatchMode=yes \
+                  -o StrictHostKeyChecking=yes \
+                  -o ExitOnForwardFailure=yes \
+                  -o ServerAliveInterval=30 \
+                  -N \
+                  -L 19870:10.14.0.11:9870 \
+                  -L 19868:10.14.0.11:9868 \
+                  -L 18088:10.14.0.11:8088 \
+                  -L 19888:10.14.0.11:19888 \
+                  -L 18640:10.14.0.10:9864 \
+                  -L 18641:10.14.0.12:9864 \
+                  -L 18642:10.14.0.13:9864 \
+                  -L 18040:10.14.0.10:8042 \
+                  -L 18041:10.14.0.12:8042 \
+                  -L 18042:10.14.0.13:8042 \
+                  team@171.22.72.225 &
+                tunnel_pid=$!
+                trap 'kill "$tunnel_pid" 2>/dev/null || true' EXIT
+                sleep 2
+                curl -fsS --max-time 15 -o /dev/null http://localhost:19870/
+                curl -fsS --max-time 15 -o /dev/null http://localhost:19868/
+                curl -fsS --max-time 15 -o /dev/null http://localhost:18088/
+                curl -fsS --max-time 15 -o /dev/null http://localhost:19888/
+                curl -fsS --max-time 15 -o /dev/null http://localhost:18640/
+                curl -fsS --max-time 15 -o /dev/null http://localhost:18641/
+                curl -fsS --max-time 15 -o /dev/null http://localhost:18642/
+                curl -fsS --max-time 15 -o /dev/null http://localhost:18040/
+                curl -fsS --max-time 15 -o /dev/null http://localhost:18041/
+                curl -fsS --max-time 15 -o /dev/null http://localhost:18042/
+
+                echo "все проверенные веб-интерфейсы ответили"
