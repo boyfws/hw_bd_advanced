@@ -164,6 +164,10 @@ DOGGY
             <value>$NAMENODE_IP:8020</value>
         </property>
         <property>
+            <name>dfs.namenode.rpc-bind-host</name>
+            <value>$NAMENODE_IP</value>
+        </property>
+        <property>
             <name>dfs.namenode.http-address</name>
             <value>$NAMENODE_IP:9870</value>
         </property>
@@ -186,6 +190,14 @@ DOGGY
         <property>
             <name>dfs.namenode.checkpoint.period</name>
             <value>60</value>
+        </property>
+        <property>
+            <name>dfs.namenode.rpc-bind-host</name>
+            <value>0.0.0.0</value>
+        </property>
+        <property>
+            <name>dfs.namenode.http-bind-host</name>
+            <value>0.0.0.0</value>
         </property>
     </configuration>
 DOGGIK
@@ -284,7 +296,6 @@ if [[ "$assert_ok" != true ]]; then
 fi
 
 echo "hadoop успешно развернут и работает"
-
 
 
 
