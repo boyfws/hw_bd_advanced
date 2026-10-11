@@ -291,6 +291,11 @@ if [[ "$assert_ok" != true ]]; then
     exit 1
 fi
 
+timeout 300 "$HADOOP_HOME/bin/hdfs" dfsadmin -safemode wait
+
+func_on_node "$NAMENODE"<<'PROVERKA'
+    curl -fsS -o --max-time 60 /dev/null http://team-14-nn:9868/
+PROVERKA
 echo "hadoop успешно развернут и работает"
 
 
