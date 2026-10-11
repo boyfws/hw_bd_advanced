@@ -38,22 +38,10 @@ jobs:
                 chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
             
             
-            - name: Проверить формат ключа
+            - name: Проверить приватный ключ
               run: |
-                key="$HOME/.ssh/private_key"
-
-                if grep -qF '\n' "$key"; then
-                    echo "В файле есть буквальные \n вместо переносов строк"
-                elif grep -qE '^-----BEGIN .*PRIVATE KEY-----' "$key"; then
-                    echo "Есть заголовок приватного ключа"
-                elif base64 --decode "$key" 2>/dev/null |
-                    grep -E '^-----BEGIN .*PRIVATE KEY-----' >/dev/null; then
-                    echo "Приватный ключ записан в Base64"
-                elif grep -qE '(^|[[:space:]])(ssh-|ecdsa-)' "$key"; then
-                    echo "В файле публичный ключ — для входа нужен приватный"
-                else
-                    echo "Формат не распознан"
-                fi
+                ssh-keygen -y -P "" -f "$HOME/.ssh/private_key" >/dev/null
+                echo "openssh прочитал приватный ключ"
 
 
             - name: копируем деплой на edge ноду
