@@ -37,6 +37,25 @@ jobs:
                 printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
                 chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
             
+            
+            - name: Проверить формат ключа
+              run: |
+                key="$HOME/.ssh/private_key"
+
+                if grep -qF '\n' "$key"; then
+                    echo "В файле есть буквальные \n вместо переносов строк"
+                elif grep -qE '^-----BEGIN .*PRIVATE KEY-----' "$key"; then
+                    echo "Есть заголовок приватного ключа"
+                elif base64 --decode "$key" 2>/dev/null |
+                    grep -E '^-----BEGIN .*PRIVATE KEY-----' >/dev/null; then
+                    echo "Приватный ключ записан в Base64"
+                elif grep -qE '(^|[[:space:]])(ssh-|ecdsa-)' "$key"; then
+                    echo "В файле публичный ключ — для входа нужен приватный"
+                else
+                    echo "Формат не распознан"
+                fi
+
+
             - name: копируем деплой на edge ноду
               run: |
                 scp -i "$HOME/.ssh/private_key"  \
