@@ -13,12 +13,16 @@ jobs:
           PRIVATE_KEY: ${{ secrets.SSH_PRIVATE }}
           KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
         run: |
+          set -e
           test -n "$PRIVATE_KEY"
           test -n "$KNOWN_HOSTS"
+
           mkdir -p "$HOME/.ssh"
           chmod 700 "$HOME/.ssh"
+
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
           chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
 
       - name: Check server
@@ -61,4 +65,40 @@ jobs:
 
           echo "=== Existing Hive processes ==="
           ps -eo pid,comm,args | grep -E '[H]iveServer2|[H]iveMetaStore' || true
+          EOF
+
+      - name: Check other nodes
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            team@171.22.72.225 \
+            'bash -s' <<'EOF'
+          set -e
+
+          for node in team-14-nn team-14-00 team-14-01; do
+              echo "========== $node =========="
+
+              ssh -i "$HOME/.ssh/team_internal" \
+                  -o BatchMode=yes \
+                  -o StrictHostKeyChecking=accept-new \
+                  -o ConnectTimeout=10 \
+                  "team@$node" '
+                      echo "=== Hostname ==="
+                      hostname
+
+                      echo "=== Memory ==="
+                      free -h
+
+                      echo "=== Disk ==="
+                      df -h /home/team
+
+                      echo "=== Java ==="
+                      java -version 2>&1 | head -n 1
+
+                      echo "=== Listening ports ==="
+                      ss -ltn
+                  '
+          done
           EOF
