@@ -14,6 +14,7 @@ jobs:
           KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
         run: |
           set -e
+
           test -n "$PRIVATE_KEY"
           test -n "$KNOWN_HOSTS"
 
@@ -57,6 +58,13 @@ jobs:
               echo "PostgreSQL client not found"
           fi
 
+          echo "=== PostgreSQL server ==="
+          if command -v pg_config >/dev/null 2>&1; then
+              pg_config --version
+          else
+              echo "PostgreSQL development tools not found"
+          fi
+
           echo "=== Listening ports ==="
           for port in 5432 9083 10000; do
               echo "Port $port:"
@@ -65,6 +73,13 @@ jobs:
 
           echo "=== Existing Hive processes ==="
           ps -eo pid,comm,args | grep -E '[H]iveServer2|[H]iveMetaStore' || true
+
+          echo "=== Sudo access ==="
+          if sudo -n true 2>/dev/null; then
+              echo "Passwordless sudo available"
+          else
+              echo "Passwordless sudo unavailable"
+          fi
           EOF
 
       - name: Check other nodes
@@ -78,7 +93,10 @@ jobs:
           set -e
 
           for node in team-14-nn team-14-00 team-14-01; do
-              echo "========== $node =========="
+
+              echo "================================"
+              echo "Checking node: $node"
+              echo "================================"
 
               ssh -i "$HOME/.ssh/team_internal" \
                   -o BatchMode=yes \
@@ -99,6 +117,26 @@ jobs:
 
                       echo "=== Listening ports ==="
                       ss -ltn
+
+                      echo "=== PostgreSQL client ==="
+                      if command -v psql >/dev/null 2>&1; then
+                          psql --version
+                      else
+                          echo "PostgreSQL client not found"
+                      fi
+
+                      echo "=== PostgreSQL server packages ==="
+                      dpkg-query -W postgresql postgresql-common 2>/dev/null || true
+
+                      echo "=== PostgreSQL processes ==="
+                      ps -eo pid,comm,args | grep "[p]ostgres" || true
+
+                      echo "=== Sudo access ==="
+                      if sudo -n true 2>/dev/null; then
+                          echo "Passwordless sudo available"
+                      else
+                          echo "Passwordless sudo unavailable"
+                      fi
                   '
           done
           EOF
