@@ -27,8 +27,7 @@ fi
 
 echo "=== Распаковываем Tez ==="
 if [[ ! -d "$TEZ_DIR" ]]; then
-    mkdir -p "$TEZ_DIR"
-    tar -xzf "$DOWNLOAD_DIR/apache-tez-${TEZ_VERSION}-bin.tar.gz" -C "$TEZ_DIR"
+    tar -xzf "$DOWNLOAD_DIR/apache-tez-${TEZ_VERSION}-bin.tar.gz" -C "$HOME"
 else
     echo "Tez уже распакован"
 fi
