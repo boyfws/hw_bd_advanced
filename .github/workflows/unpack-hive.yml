@@ -1,0 +1,59 @@
+
+name: Unpack Hive
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: team-14
+  cancel-in-progress: false
+
+jobs:
+  unpack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v4
+
+      - name: Validate unpack script
+        run: |
+          bash -n hw_3/unpack_hive.sh
+          grep -F 'tar -xzf "$DOWNLOAD_DIR/apache-tez-${TEZ_VERSION}-bin.tar.gz" -C "$HOME"' hw_3/unpack_hive.sh
+
+      - name: Prepare SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$PRIVATE_KEY"
+          test -n "$KNOWN_HOSTS"
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
+
+      - name: Copy unpack script
+        run: |
+          scp -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            hw_3/unpack_hive.sh \
+            team@171.22.72.225:/home/team/unpack_hive.sh
+
+      - name: Unpack Hive and Tez
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            team@171.22.72.225 \
+            'bash /home/team/unpack_hive.sh'
