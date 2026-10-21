@@ -74,7 +74,7 @@ jobs:
             -o ConnectTimeout=10 \
             -o ServerAliveInterval=30 \
             team@171.22.72.225 \
-            'bash /home/team/deploy_hive.sh --check-only'
+            'bash /home/team/deploy_hive.sh'
 
       - name: Remove temporary credential
         if: always()
@@ -84,4 +84,3 @@ jobs:
             -o StrictHostKeyChecking=yes \
             team@171.22.72.225 \
             'rm -f "$HOME/.hive_db_password"' || true
-
