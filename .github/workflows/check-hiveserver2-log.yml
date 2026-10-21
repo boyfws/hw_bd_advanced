@@ -31,4 +31,4 @@ jobs:
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             team@171.22.72.225 \
-            'tail -n 100 /home/team/hw3-hiveserver2.log'
+            'echo "PROCESS"; jps -l | grep -E "HiveServer2|RunJar" || true; echo "PORT"; ss -ltnp | grep ":10000 " || true; echo "MEMORY"; free -h; echo "ERRORS"; grep -Ei "exception|failed|outofmemory|error" /home/team/hw3-hiveserver2.log | tail -n 20 || true'
