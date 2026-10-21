@@ -28,8 +28,7 @@ jobs:
 
 
 
-
-            - name: Diagnose Hive INSERT
+      - name: Diagnose Hive INSERT
         run: |
           ssh -i "$HOME/.ssh/private_key" \
             -o BatchMode=yes \
