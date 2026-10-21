@@ -30,7 +30,8 @@ jobs:
 
 
 
-      - name: Diagnose Tez and INSERT
+      
+      - name: Check HiveServer2 health
         run: |
           ssh -i "$HOME/.ssh/private_key" \
             -o BatchMode=yes \
@@ -39,37 +40,24 @@ jobs:
           set -euo pipefail
 
           export HADOOP_HOME=/home/team/hadoop-3.5.0
-          export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
           export HIVE_HOME=/home/team/apache-hive-4.1.0-bin
+          export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
           export PATH="$HADOOP_HOME/bin:$HIVE_HOME/bin:$PATH"
 
-          echo "HIVE SERVER SETTINGS"
+          echo "PORT 10000"
+          ss -ltnp | grep ':10000' || true
+
+          echo "JAVA PROCESSES"
+          jps -lv | grep -Ei 'HiveServer2|RunJar|service.server' || true
+
+          echo "PROCESS LIST"
+          ps -eo pid,ppid,args |
+            grep -Ei '[h]iveserver2|[H]iveServer2' |
+            head -n 15 || true
+
+          echo "BEELINE TEST"
           timeout 60 "$HIVE_HOME/bin/beeline" \
-            --silent=true \
-            -u "jdbc:hive2://127.0.0.1:10000/default" \
-            -e "SET hive.execution.engine;
-                SET tez.lib.uris;
-                SET tez.use.cluster.hadoop-libs;" \
-            2>&1 | tail -n 45
-
-          echo "TEZ ARCHIVE IN HDFS"
-          "$HADOOP_HOME/bin/hdfs" dfs \
-            -ls /apps/tez/tez-0.10.5.tar.gz
-
-          echo "HIVE CONFIG FILES"
-          ls -l \
-            "$HIVE_HOME/conf/tez-site.xml" \
-            "$HADOOP_HOME/etc/hadoop/tez-site.xml" \
-            /home/team/apache-tez-0.10.5-bin/conf/tez-site.xml \
-            2>&1 || true
-
-          echo "FAILED INSERT QUERY"
-          grep -n -F \
-            'team_20261021214319_5c94e86e-e5e1-4a57-ac23-21a41aaa3723' \
-            /tmp/team/hive.log | head -n 15 || true
-
-          echo "HIVE ERRORS DURING INSERT"
-          grep -Ein \
-            'ClassNotFoundException|NoClassDefFoundError|TezException|YarnException|tez.lib.uris|Failed to submit|Error running task|FAILED: Execution Error' \
-            /tmp/team/hive.log | tail -n 35 || true
+            -u 'jdbc:hive2://127.0.0.1:10000/default' \
+            -e 'SHOW DATABASES;'
           REMOTE
+
