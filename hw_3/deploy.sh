@@ -86,6 +86,7 @@ if not password or len(password) > 128:
 
 escaped = password.replace("'", "''")
 
+print("SET log_min_error_statement = PANIC;")
 print("ALTER ROLE hive WITH LOGIN PASSWORD '" + escaped + "';")
 PY
 
