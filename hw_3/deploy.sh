@@ -107,9 +107,9 @@ test -f "$HOME/hw3-downloads/apache-hive-${HIVE_VERSION}-bin.tar.gz"
 test -f "$HOME/hw3-downloads/apache-tez-${TEZ_VERSION}-bin.tar.gz"
 
 echo "Результат"
-echo "PostgreSQL, Hive, Tez и Hadoop обнаружены"
-echo "Предварительные проверки завершены успешно"
-echo "Службы Hadoop не изменялись"
+echo "PostgreSQL, Hive, Tez и Hadoop обнаружены."
+echo "Предварительные проверки завершены успешно."
+echo "Службы Hadoop не изменялись."
 
 
 
@@ -272,22 +272,28 @@ config_path.chmod(0o600)
 print("Metastore configuration created")
 PY
 
-echo "Проверяем подключение к PostgreSQL"
+echo "Проверяем состояние Metastore"
 
-PGPASSWORD="$(cat "$PASSWORD_FILE")" \
-  psql -h 127.0.0.1 -U hive \
-  -d hive_metastore -Atqc 'SELECT 1' \
-  | grep -qx 1
-
-echo "Проверяем схему Metastore"
-
-if "$HIVE_HOME/bin/schematool" \
-    -dbType postgres -info >/dev/null 2>&1; then
-    echo "Схема уже существует"
+if ss -ltnp | grep -Eq ':9083[[:space:]]'; then
+    echo "Metastore уже работает — повторная проверка PostgreSQL не требуется"
 else
-    echo "Инициализируем схему"
+    echo "Metastore не запущен — проверяем PostgreSQL"
+
+    PGPASSWORD="$(cat "$PASSWORD_FILE")" \
+      psql -h 127.0.0.1 -U hive \
+      -d hive_metastore -Atqc 'SELECT 1' \
+      | grep -qx 1
+fi
+
+echo "Проверяем необходимость инициализации схемы"
+
+if ss -ltnp | grep -Eq ':9083[[:space:]]'; then
+    echo "Metastore уже работает — схему повторно не проверяем"
+else
+    echo "Metastore не запущен — проверяем схему"
+
     "$HIVE_HOME/bin/schematool" \
-      -dbType postgres -initSchema
+        -dbType postgres -info
 fi
 
 echo "Запускаем Metastore"
