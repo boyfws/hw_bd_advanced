@@ -292,32 +292,110 @@ fi
 echo "Запускаем Metastore"
 
 if ss -ltn | grep -Eq ':9083[[:space:]]'; then
-    echo "Порт 9083 уже занят; запуск остановлен"
+    echo "Metastore уже слушает порт 9083"
+else
+    export HADOOP_CLIENT_OPTS="-Xmx768m"
+
+    nohup "$HIVE_HOME/bin/hive" --service metastore \
+        > "$LOG_FILE" 2>&1 < /dev/null &
+
+    echo "Ожидаем запуск Metastore"
+
+    READY=0
+    for attempt in $(seq 1 30); do
+        if ss -ltn | grep -Eq ':9083[[:space:]]'; then
+            READY=1
+            break
+        fi
+        sleep 2
+    done
+
+    if [[ "$READY" -ne 1 ]]; then
+        echo "Metastore не открыл порт 9083"
+        exit 1
+    fi
+fi
+
+
+METASTORE_SETUP
+
+echo "Запуск HiveServer2"
+
+# Проверяем, что Metastore доступен с edge-ноды
+if ! timeout 5 bash -c \
+  'echo > /dev/tcp/team-14-00/9083' 2>/dev/null; then
+    echo "ОШИБКА: Metastore недоступен с edge-ноды"
     exit 1
 fi
 
-export HADOOP_CLIENT_OPTS="-Xmx768m"
+export HIVE_HOME="$HOME/apache-hive-4.1.0-bin"
+export HADOOP_HOME="$HOME/hadoop-3.5.0"
+export PATH="$HIVE_HOME/bin:$HADOOP_HOME/bin:$PATH"
 
-nohup "$HIVE_HOME/bin/hive" --service metastore \
-    > "$LOG_FILE" 2>&1 < /dev/null &
+# Создаем отдельную конфигурацию HiveServer2
+mkdir -p "$HIVE_HOME/conf"
 
-echo "Ожидаем запуск службы"
+python3 - "$HIVE_HOME/conf/hive-site.xml" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+properties = {
+    "hive.metastore.uris": "thrift://team-14-00:9083",
+    "hive.server2.thrift.port": "10000",
+    "hive.server2.thrift.bind.host": "127.0.0.1",
+    "hive.server2.authentication": "NONE",
+    "hive.server2.enable.doAs": "false",
+    "hive.execution.engine": "tez",
+    "hive.metastore.warehouse.dir": "/user/hive/warehouse",
+}
+
+root = ET.Element("configuration")
+for key, value in properties.items():
+    prop = ET.SubElement(root, "property")
+    ET.SubElement(prop, "name").text = key
+    ET.SubElement(prop, "value").text = value
+
+path = Path(sys.argv[1])
+ET.ElementTree(root).write(
+    path, encoding="utf-8", xml_declaration=True
+)
+print("Конфигурация HiveServer2 создана")
+PY
+
+# Не запускаем второй экземпляр на занятом порту
+if ss -ltn | grep -Eq ':10000[[:space:]]'; then
+    echo "Порт 10000 уже занят; второй сервер не запускаем"
+    exit 1
+fi
+
+echo "Запускаем HiveServer2"
+
+nohup "$HIVE_HOME/bin/hiveserver2" \
+  > "$HOME/hw3-hiveserver2.log" 2>&1 < /dev/null &
+
+HS2_PID=$!
+echo "PID HiveServer2: $HS2_PID"
+
+echo "Ожидаем порт 10000"
 
 READY=0
-
-for attempt in $(seq 1 30); do
-    if ss -ltn | grep -Eq ':9083[[:space:]]'; then
+for attempt in $(seq 1 60); do
+    if ss -ltn | grep -Eq ':10000[[:space:]]'; then
         READY=1
+        break
+    fi
+    if ! kill -0 "$HS2_PID" 2>/dev/null; then
+        echo "Процесс HiveServer2 завершился"
         break
     fi
     sleep 2
 done
 
 if [[ "$READY" -ne 1 ]]; then
-    echo "Metastore не открыл порт 9083"
-    echo "Проверьте журнал: $LOG_FILE"
+    echo "HiveServer2 не запустился"
+    echo "Журнал: $HOME/hw3-hiveserver2.log"
     exit 1
 fi
 
-echo "Hive Metastore запущен на порту 9083"
-METASTORE_SETUP
+echo "HiveServer2 слушает порт 10000"
