@@ -1,4 +1,5 @@
 
+
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -63,6 +64,39 @@ df -h /
 echo "Удалённый узел готов"
 REMOTE
 
+echo "Настройка доступа Hive к PostgreSQL"
+
+python3 - "$PASSWORD_FILE" <<'PY' | \
+ssh -i "$SSH_KEY" \
+  -o BatchMode=yes \
+  -o ConnectTimeout=10 \
+  "team@$REMOTE_HOST" \
+  'sudo -n -u postgres psql -v ON_ERROR_STOP=1'
+import pathlib
+import sys
+
+password = pathlib.Path(sys.argv[1]).read_text()
+
+if not password or len(password) > 128:
+    raise SystemExit("Некорректный пароль Hive")
+
+escaped = password.replace("'", "''")
+
+print("ALTER ROLE hive WITH LOGIN PASSWORD '" + escaped + "';")
+PY
+
+echo "Проверка роли Hive"
+
+ssh -i "$SSH_KEY" \
+  -o BatchMode=yes \
+  "team@$REMOTE_HOST" \
+  'sudo -n -u postgres psql -Atqc \
+  "SELECT rolcanlogin FROM pg_roles WHERE rolname = '\''hive'\'';"' \
+  | grep -qx t
+
+echo "Доступ пользователя hive настроен"
+
+
 echo "Проверка возможности установки Hive"
 
 test -f "$HOME/hw3-downloads/apache-hive-${HIVE_VERSION}-bin.tar.gz"
@@ -72,3 +106,4 @@ echo "Результат"
 echo "PostgreSQL, Hive, Tez и Hadoop обнаружены."
 echo "Предварительные проверки завершены успешно."
 echo "Службы Hadoop не изменялись."
+
