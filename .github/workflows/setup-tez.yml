@@ -1,0 +1,52 @@
+
+name: Setup Tez
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: team-14
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
+
+      - name: Copy Tez script
+        run: |
+          sed -i 's/\r$//' hw_3/setup_tez.sh
+          bash -n hw_3/setup_tez.sh
+
+          scp -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            hw_3/setup_tez.sh \
+            team@171.22.72.225:/home/team/setup_tez.sh
+
+      - name: Setup Tez on edge
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 \
+            'bash /home/team/setup_tez.sh'
