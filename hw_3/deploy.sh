@@ -71,7 +71,7 @@ ssh -i "$SSH_KEY" \
   -o BatchMode=yes \
   -o ConnectTimeout=10 \
   "team@$REMOTE_HOST" \
-  'sudo -n -u postgres psql -v ON_ERROR_STOP=1'
+    'sudo -n -u postgres psql -X -q -v ON_ERROR_STOP=1'
 import pathlib
 import sys
 
@@ -90,8 +90,7 @@ echo "Проверка роли Hive"
 ssh -i "$SSH_KEY" \
   -o BatchMode=yes \
   "team@$REMOTE_HOST" \
-  'sudo -n -u postgres psql -Atqc \
-  "SELECT rolcanlogin FROM pg_roles WHERE rolname = '\''hive'\'';"' \
+  "sudo -n -u postgres psql -Atqc \"SELECT rolcanlogin FROM pg_roles WHERE rolname = 'hive';\"" \
   | grep -qx t
 
 echo "Доступ пользователя hive настроен"
