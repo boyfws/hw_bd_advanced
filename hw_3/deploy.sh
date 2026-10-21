@@ -12,6 +12,130 @@ REMOTE_HOST="team-14-00"
 SSH_KEY="$HOME/.ssh/team_internal"
 PASSWORD_FILE="$HOME/.hive_db_password"
 
+
+# Отдельный режим настройки Tez и перезапуска HiveServer2.
+# PostgreSQL, Metastore, HDFS и YARN не затрагиваются.
+if [[ "${1:-}" == "--restart-hs2-only" ]]; then
+    test "$(hostname -s)" = "team-14-en"
+    test "$(whoami)" = "team"
+
+    export HIVE_HOME HADOOP_HOME
+    export TEZ_CONF_DIR="$TEZ_HOME/conf"
+    export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
+    export HIVE_CONF_DIR="$HIVE_HOME/conf"
+    export PATH="$HADOOP_HOME/bin:$HIVE_HOME/bin:$PATH"
+
+    test -f "$HIVE_CONF_DIR/hive-site.xml"
+    test -f "$HIVE_CONF_DIR/tez-site.xml"
+    test -d "$TEZ_HOME/lib"
+
+    echo "Подключаем библиотеки Tez"
+
+    TEZ_JARS="$(
+      find "$TEZ_HOME" -type f -name '*.jar' \
+        | paste -sd ':' -
+    )"
+    test -n "$TEZ_JARS"
+
+    export HADOOP_CLASSPATH="$TEZ_CONF_DIR:$TEZ_JARS${HADOOP_CLASSPATH:+:$HADOOP_CLASSPATH}"
+
+    echo "Настраиваем HiveServer2"
+
+    python3 - "$HIVE_CONF_DIR/hive-site.xml" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+tree = ET.parse(path)
+root = tree.getroot()
+
+settings = {
+    "hive.execution.engine": "tez",
+    "tez.lib.uris": "hdfs:///apps/tez/tez-0.10.5.tar.gz",
+    "tez.use.cluster.hadoop-libs": "true",
+}
+
+for key, value in settings.items():
+    prop = next(
+        (p for p in root.findall("property")
+         if p.findtext("name") == key),
+        None
+    )
+    if prop is None:
+        prop = ET.SubElement(root, "property")
+        ET.SubElement(prop, "name").text = key
+
+    field = prop.find("value")
+    if field is None:
+        field = ET.SubElement(prop, "value")
+    field.text = value
+
+tree.write(path, encoding="utf-8", xml_declaration=True)
+print("HiveServer2 configuration OK")
+PY
+
+    echo "Проверяем текущий HiveServer2"
+
+    HS2_PIDS="$(
+      jps -l | awk \
+        '$2 == "org.apache.hive.service.server.HiveServer2" {print $1}'
+    )"
+
+    if ss -ltn | grep -Eq ':10000[[:space:]]'; then
+        if [[ -z "$HS2_PIDS" ]]; then
+            echo "Порт 10000 занят, но процесс HiveServer2 не определён"
+            echo "Перезапуск отменён для безопасности"
+            exit 1
+        fi
+
+        echo "Останавливаем только HiveServer2: $HS2_PIDS"
+        for pid in $HS2_PIDS; do
+            kill -TERM "$pid"
+        done
+
+        for attempt in $(seq 1 30); do
+            if ! ss -ltn | grep -Eq ':10000[[:space:]]'; then
+                break
+            fi
+            sleep 2
+        done
+
+        if ss -ltn | grep -Eq ':10000[[:space:]]'; then
+            echo "HiveServer2 не освободил порт 10000"
+            echo "Принудительная остановка не выполняется"
+            exit 1
+        fi
+    fi
+
+    echo "Запускаем HiveServer2 с Tez"
+
+    nohup "$HIVE_HOME/bin/hiveserver2" \
+      > "$HOME/hw3-hiveserver2.log" 2>&1 < /dev/null &
+
+    HS2_PID=$!
+    READY=0
+
+    for attempt in $(seq 1 60); do
+        if ss -ltn | grep -Eq ':10000[[:space:]]'; then
+            READY=1
+            break
+        fi
+        if ! kill -0 "$HS2_PID" 2>/dev/null; then
+            break
+        fi
+        sleep 2
+    done
+
+    if [[ "$READY" -ne 1 ]]; then
+        echo "HiveServer2 не открыл порт 10000"
+        tail -n 60 "$HOME/hw3-hiveserver2.log" || true
+        exit 1
+    fi
+
+    echo "HiveServer2 запущен с конфигурацией Tez"
+    exit 0
+fi
+
 echo "Проверка окружения"
 
 test "$(hostname -s)" = "team-14-en"
