@@ -107,7 +107,217 @@ test -f "$HOME/hw3-downloads/apache-hive-${HIVE_VERSION}-bin.tar.gz"
 test -f "$HOME/hw3-downloads/apache-tez-${TEZ_VERSION}-bin.tar.gz"
 
 echo "Результат"
-echo "PostgreSQL, Hive, Tez и Hadoop обнаружены."
-echo "Предварительные проверки завершены успешно."
-echo "Службы Hadoop не изменялись."
+echo "PostgreSQL, Hive, Tez и Hadoop обнаружены"
+echo "Предварительные проверки завершены успешно"
+echo "Службы Hadoop не изменялись"
 
+
+
+
+echo "Подготовка Hive Metastore"
+
+METASTORE_HOST="team-14-00"
+
+ssh -i "$SSH_KEY" -o BatchMode=yes \
+  "team@$METASTORE_HOST" \
+  'mkdir -p "$HOME/hw3-downloads"'
+
+scp -i "$SSH_KEY" -o BatchMode=yes \
+  "$HOME/hw3-downloads/apache-hive-${HIVE_VERSION}-bin.tar.gz" \
+  "team@$METASTORE_HOST:/home/team/hw3-downloads/"
+
+ssh -i "$SSH_KEY" -o BatchMode=yes \
+  "team@$METASTORE_HOST" 'bash -se' <<'METASTORE'
+set -euo pipefail
+
+HIVE_HOME="$HOME/apache-hive-4.1.0-bin"
+ARCHIVE="$HOME/hw3-downloads/apache-hive-4.1.0-bin.tar.gz"
+
+test "$(hostname -s)" = "team-14-00"
+test -f "$ARCHIVE"
+
+if [[ ! -d "$HIVE_HOME" ]]; then
+    echo "Распаковываем Hive"
+    tar -xzf "$ARCHIVE" -C "$HOME"
+fi
+
+test -x "$HIVE_HOME/bin/hive"
+test -x "$HIVE_HOME/bin/schematool"
+
+echo "Устанавливаем PostgreSQL JDBC"
+if ! dpkg-query -W -f='${Status}' \
+    libpostgresql-jdbc-java 2>/dev/null |
+    grep -q 'install ok installed'; then
+    sudo -n env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -y --no-install-recommends \
+      libpostgresql-jdbc-java
+fi
+
+test -f /usr/share/java/postgresql.jar
+
+echo "Подключаем JDBC-драйвер к Hive"
+ln -sfn /usr/share/java/postgresql.jar \
+  "$HIVE_HOME/lib/postgresql.jar"
+
+echo "Проверяем подготовку"
+test -x "$HIVE_HOME/bin/schematool"
+test -e "$HIVE_HOME/lib/postgresql.jar"
+
+echo "Hive Metastore: файлы и JDBC подготовлены"
+METASTORE
+
+
+echo "Проверка PostgreSQL для Hive Metastore"
+
+ssh -i "$SSH_KEY" \
+  -o BatchMode=yes \
+  -o ConnectTimeout=10 \
+  "team@$REMOTE_HOST" 'bash -se' <<'METASTORE_CHECK'
+set -euo pipefail
+
+HIVE_HOME="$HOME/apache-hive-4.1.0-bin"
+
+test "$(hostname -s)" = "team-14-00"
+test -x "$HIVE_HOME/bin/schematool"
+test -e "$HIVE_HOME/lib/postgresql.jar"
+
+sudo -n -u postgres psql -Atqc \
+  "SELECT rolcanlogin FROM pg_roles WHERE rolname='hive';" \
+  | grep -qx t
+
+sudo -n -u postgres psql -Atqc \
+  "SELECT datname FROM pg_database WHERE datname='hive_metastore';" \
+  | grep -qx hive_metastore
+
+echo "Hive Metastore готов к настройке подключения"
+METASTORE_CHECK
+
+
+
+echo "Настраиваем Hive Metastore"
+
+# Передаём пароль на сервер Metastore без вывода в журнал
+ssh -i "$SSH_KEY" -o BatchMode=yes \
+  "team@$REMOTE_HOST" \
+  'umask 077; cat > "$HOME/.hw3_metastore_password"' \
+  < "$PASSWORD_FILE"
+
+ssh -i "$SSH_KEY" \
+  -o BatchMode=yes \
+  -o ConnectTimeout=10 \
+  "team@$REMOTE_HOST" 'bash -se' <<'METASTORE_SETUP'
+set -euo pipefail
+
+test "$(hostname -s)" = "team-14-00"
+
+HIVE_HOME="$HOME/apache-hive-4.1.0-bin"
+HADOOP_HOME="$HOME/hadoop-3.5.0"
+PASSWORD_FILE="$HOME/.hw3_metastore_password"
+CONFIG_FILE="$HIVE_HOME/conf/hive-site.xml"
+LOG_FILE="$HOME/hw3-metastore.log"
+
+export HIVE_HOME HADOOP_HOME
+export PATH="$HIVE_HOME/bin:$HADOOP_HOME/bin:$PATH"
+
+# Удаляем временную копию пароля после настройки.
+trap 'rm -f "$PASSWORD_FILE"' EXIT
+
+test -x "$HIVE_HOME/bin/schematool"
+test -x "$HADOOP_HOME/bin/hadoop"
+test -e "$HIVE_HOME/lib/postgresql.jar"
+test -s "$PASSWORD_FILE"
+
+echo "Создаём конфигурацию Metastore"
+
+python3 - "$CONFIG_FILE" "$PASSWORD_FILE" <<'PY'
+import sys
+import pathlib
+import xml.etree.ElementTree as ET
+
+config_path = pathlib.Path(sys.argv[1])
+password_path = pathlib.Path(sys.argv[2])
+password = password_path.read_text()
+
+if not password or len(password) > 128:
+    raise SystemExit("Invalid database password")
+
+properties = {
+    "javax.jdo.option.ConnectionURL":
+        "jdbc:postgresql://127.0.0.1:5432/hive_metastore",
+    "javax.jdo.option.ConnectionDriverName":
+        "org.postgresql.Driver",
+    "javax.jdo.option.ConnectionUserName": "hive",
+    "javax.jdo.option.ConnectionPassword": password,
+    "hive.metastore.warehouse.dir":
+        "/user/hive/warehouse",
+    "hive.metastore.schema.verification": "true",
+}
+
+root = ET.Element("configuration")
+
+for name, value in properties.items():
+    item = ET.SubElement(root, "property")
+    ET.SubElement(item, "name").text = name
+    ET.SubElement(item, "value").text = value
+
+tree = ET.ElementTree(root)
+tree.write(
+    config_path,
+    encoding="utf-8",
+    xml_declaration=True
+)
+config_path.chmod(0o600)
+
+print("Metastore configuration created")
+PY
+
+echo "Проверяем подключение к PostgreSQL"
+
+PGPASSWORD="$(cat "$PASSWORD_FILE")" \
+  psql -h 127.0.0.1 -U hive \
+  -d hive_metastore -Atqc 'SELECT 1' \
+  | grep -qx 1
+
+echo "Проверяем схему Metastore"
+
+if "$HIVE_HOME/bin/schematool" \
+    -dbType postgres -info >/dev/null 2>&1; then
+    echo "Схема уже существует"
+else
+    echo "Инициализируем схему"
+    "$HIVE_HOME/bin/schematool" \
+      -dbType postgres -initSchema
+fi
+
+echo "Запускаем Metastore"
+
+if ss -ltn | grep -Eq ':9083[[:space:]]'; then
+    echo "Порт 9083 уже занят; запуск остановлен"
+    exit 1
+fi
+
+export HADOOP_CLIENT_OPTS="-Xmx768m"
+
+nohup "$HIVE_HOME/bin/hive" --service metastore \
+    > "$LOG_FILE" 2>&1 < /dev/null &
+
+echo "Ожидаем запуск службы"
+
+READY=0
+
+for attempt in $(seq 1 30); do
+    if ss -ltn | grep -Eq ':9083[[:space:]]'; then
+        READY=1
+        break
+    fi
+    sleep 2
+done
+
+if [[ "$READY" -ne 1 ]]; then
+    echo "Metastore не открыл порт 9083"
+    echo "Проверьте журнал: $LOG_FILE"
+    exit 1
+fi
+
+echo "Hive Metastore запущен на порту 9083"
+METASTORE_SETUP
