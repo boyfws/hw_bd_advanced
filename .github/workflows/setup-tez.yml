@@ -83,3 +83,22 @@ jobs:
             wc -l
           REMOTE
 
+      - name: Configure Tez for Hive
+        run: |
+          set -euo pipefail
+
+          sed -i 's/\r$//' hw_3/configure_hive_tez.sh
+          bash -n hw_3/configure_hive_tez.sh
+
+          scp -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            hw_3/configure_hive_tez.sh \
+            team@171.22.72.225:/home/team/configure_hive_tez.sh
+
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 \
+            'bash /home/team/configure_hive_tez.sh'
+
