@@ -88,6 +88,25 @@ jobs:
           echo "Проверяем PostgreSQL после настройки"
           sudo -n -u postgres psql -Atqc 'SELECT 1;'
 
+          
+          echo "Создаём пользователя и базу Hive"
+
+          if ! sudo -n -u postgres psql -Atqc \
+            "SELECT 1 FROM pg_roles WHERE rolname='hive'" | grep -qx 1; then
+            sudo -n -u postgres createuser --no-superuser \
+              --no-createdb --no-createrole --no-login hive
+          fi
+
+          if ! sudo -n -u postgres psql -Atqc \
+            "SELECT 1 FROM pg_database WHERE datname='hive_metastore'" | grep -qx 1; then
+            sudo -n -u postgres createdb -O hive hive_metastore
+          fi
+
+          echo "Проверяем базу Hive"
+          sudo -n -u postgres psql -Atqc \
+            "SELECT datname FROM pg_database WHERE datname='hive_metastore';"
+
+
           echo "Проверяем Hadoop после установки"
           jps | grep -E '[[:space:]]DataNode$'
           jps | grep -E '[[:space:]]NodeManager$'
