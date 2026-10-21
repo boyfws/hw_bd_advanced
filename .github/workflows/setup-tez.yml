@@ -50,3 +50,36 @@ jobs:
             -o StrictHostKeyChecking=yes \
             team@171.22.72.225 \
             'bash /home/team/setup_tez.sh'
+
+      - name: Upload transactions to HDFS
+        run: |
+          set -euo pipefail
+
+          scp -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            hw_3/transactions.csv \
+            team@171.22.72.225:/home/team/transactions_hw3.csv
+
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 'bash -se' <<'REMOTE'
+          set -euo pipefail
+
+          HDFS="/home/team/hadoop-3.5.0/bin/hdfs"
+          DIR="/user/team/hw3/raw_transactions"
+
+          "$HDFS" dfs -mkdir -p "$DIR"
+          "$HDFS" dfs -put -f \
+            /home/team/transactions_hw3.csv \
+            "$DIR/transactions.csv"
+
+          echo "Файл в HDFS"
+          "$HDFS" dfs -ls "$DIR/transactions.csv"
+
+          echo "Число строк"
+          "$HDFS" dfs -cat "$DIR/transactions.csv" |
+            wc -l
+          REMOTE
+
