@@ -159,7 +159,6 @@ jobs:
               fi
               sleep 2
           done
-§1
           if [[ "$READY" -ne 1 ]]; then
               echo "Новый Metastore не запустился"
               echo "Восстанавливаем предыдущую конфигурацию"
