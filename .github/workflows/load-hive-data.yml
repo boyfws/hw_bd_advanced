@@ -1,0 +1,106 @@
+
+name: Load Hive Data
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: team-14
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
+
+      - name: Copy SQL files
+        run: |
+          set -euo pipefail
+
+          test -s hw_3/create_table.sql
+          test -s hw_3/load_data.sql
+
+          scp -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            hw_3/create_table.sql hw_3/load_data.sql \
+            team@171.22.72.225:/home/team/
+
+      - name: Create Hive tables
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 'bash -se' <<'REMOTE'
+          set -euo pipefail
+
+          export HADOOP_HOME=/home/team/hadoop-3.5.0
+          export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
+          export HIVE_HOME=/home/team/apache-hive-4.1.0-bin
+          export PATH="$HADOOP_HOME/bin:$HIVE_HOME/bin:$PATH"
+
+          timeout 120 "$HIVE_HOME/bin/beeline" \
+            -u "jdbc:hive2://127.0.0.1:10000/default" \
+            --force=false \
+            -f /home/team/create_table.sql
+          REMOTE
+
+      - name: Insert partitioned data
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 'bash -se' <<'REMOTE'
+          set -euo pipefail
+
+          export HADOOP_HOME=/home/team/hadoop-3.5.0
+          export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
+          export HIVE_HOME=/home/team/apache-hive-4.1.0-bin
+          export PATH="$HADOOP_HOME/bin:$HIVE_HOME/bin:$PATH"
+
+          timeout 300 "$HIVE_HOME/bin/beeline" \
+            -u "jdbc:hive2://127.0.0.1:10000/default" \
+            --force=false \
+            -f /home/team/load_data.sql
+          REMOTE
+
+      - name: Verify data and partitions
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 'bash -se' <<'REMOTE'
+          set -euo pipefail
+
+          export HADOOP_HOME=/home/team/hadoop-3.5.0
+          export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
+          export HIVE_HOME=/home/team/apache-hive-4.1.0-bin
+
+          timeout 120 "$HIVE_HOME/bin/beeline" \
+            -u "jdbc:hive2://127.0.0.1:10000/default" \
+            --force=false \
+            -e "SELECT transaction_year, COUNT(*)
+                FROM hw3.transactions
+                GROUP BY transaction_year
+                ORDER BY transaction_year;
+                SHOW PARTITIONS hw3.transactions;"
+          REMOTE
