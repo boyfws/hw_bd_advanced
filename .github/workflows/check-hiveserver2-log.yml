@@ -28,7 +28,9 @@ jobs:
 
 
 
-      - name: Diagnose Hive INSERT
+
+
+      - name: Diagnose Tez and INSERT
         run: |
           ssh -i "$HOME/.ssh/private_key" \
             -o BatchMode=yes \
@@ -36,19 +38,38 @@ jobs:
             team@171.22.72.225 'bash -se' <<'REMOTE'
           set -euo pipefail
 
-          echo "=== QUERY ERRORS ==="
-          grep -Ein -C 6 \
-            '5c94e86e|Caused by:|Exception|FAILED|ERROR|Tez|YarnException' \
-            /tmp/team/hive.log | tail -n 130 || true
+          export HADOOP_HOME=/home/team/hadoop-3.5.0
+          export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
+          export HIVE_HOME=/home/team/apache-hive-4.1.0-bin
+          export PATH="$HADOOP_HOME/bin:$HIVE_HOME/bin:$PATH"
 
-          echo "=== TEZ CONFIGURATION ==="
-          test -f /home/team/apache-tez-0.10.5-bin/conf/tez-site.xml
-          grep -E 'tez.lib.uris|tez.use.cluster.hadoop-libs' \
-            /home/team/apache-tez-0.10.5-bin/conf/tez-site.xml || true
+          echo "HIVE SERVER SETTINGS"
+          timeout 60 "$HIVE_HOME/bin/beeline" \
+            --silent=true \
+            -u "jdbc:hive2://127.0.0.1:10000/default" \
+            -e "SET hive.execution.engine;
+                SET tez.lib.uris;
+                SET tez.use.cluster.hadoop-libs;" \
+            2>&1 | tail -n 45
 
-          echo "=== YARN APPLICATIONS ==="
-          /home/team/hadoop-3.5.0/bin/yarn application -list \
-            -appStates ALL | tail -n 20
+          echo "TEZ ARCHIVE IN HDFS"
+          "$HADOOP_HOME/bin/hdfs" dfs \
+            -ls /apps/tez/tez-0.10.5.tar.gz
+
+          echo "HIVE CONFIG FILES"
+          ls -l \
+            "$HIVE_HOME/conf/tez-site.xml" \
+            "$HADOOP_HOME/etc/hadoop/tez-site.xml" \
+            /home/team/apache-tez-0.10.5-bin/conf/tez-site.xml \
+            2>&1 || true
+
+          echo "FAILED INSERT QUERY"
+          grep -n -F \
+            'team_20261021214319_5c94e86e-e5e1-4a57-ac23-21a41aaa3723' \
+            /tmp/team/hive.log | head -n 15 || true
+
+          echo "HIVE ERRORS DURING INSERT"
+          grep -Ein \
+            'ClassNotFoundException|NoClassDefFoundError|TezException|YarnException|tez.lib.uris|Failed to submit|Error running task|FAILED: Execution Error' \
+            /tmp/team/hive.log | tail -n 35 || true
           REMOTE
-      
-
