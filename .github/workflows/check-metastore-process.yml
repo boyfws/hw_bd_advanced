@@ -75,7 +75,7 @@ jobs:
           tree = ET.parse(path)
           root = tree.getroot()
 
-          key = "datanucleus.connectionPool.maxPoolSize"
+          key = "hive.metastore.event.db.notification.api.auth"
           found = False
 
           for prop in root.findall("property"):
@@ -83,13 +83,13 @@ jobs:
                   value = prop.find("value")
                   if value is None:
                       value = ET.SubElement(prop, "value")
-                  value.text = "5"
+                  value.text = "false"
                   found = True
 
           if not found:
               prop = ET.SubElement(root, "property")
               ET.SubElement(prop, "name").text = key
-              ET.SubElement(prop, "value").text = "5"
+              ET.SubElement(prop, "value").text = "false"
 
           fd, temporary = tempfile.mkstemp(
               prefix=".hive-site-", dir=os.path.dirname(path)
@@ -159,7 +159,7 @@ jobs:
               fi
               sleep 2
           done
-
+§1
           if [[ "$READY" -ne 1 ]]; then
               echo "Новый Metastore не запустился"
               echo "Восстанавливаем предыдущую конфигурацию"
