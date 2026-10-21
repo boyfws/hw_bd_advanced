@@ -13,8 +13,8 @@ SSH_KEY="$HOME/.ssh/team_internal"
 PASSWORD_FILE="$HOME/.hive_db_password"
 
 
-# Отдельный режим настройки Tez и перезапуска HiveServer2.
-# PostgreSQL, Metastore, HDFS и YARN не затрагиваются.
+# Отдельный режим настройки Tez и перезапуска HiveServer2
+# PostgreSQL, Metastore, HDFS и YARN не затрагиваются
 if [[ "${1:-}" == "--restart-hs2-only" ]]; then
     test "$(hostname -s)" = "team-14-en"
     test "$(whoami)" = "team"
@@ -76,10 +76,10 @@ PY
 
     echo "Проверяем текущий HiveServer2"
 
-    HS2_PIDS="$(
-      jps -l | awk \
-        '$2 == "org.apache.hive.service.server.HiveServer2" {print $1}'
-    )"
+HS2_PIDS="$(
+  jps -lv | awk \
+    '/-Dproc_hiveserver2/ && !/awk/ {print $1}'
+)"
 
     if ss -ltn | grep -Eq ':10000[[:space:]]'; then
         if [[ -z "$HS2_PIDS" ]]; then
