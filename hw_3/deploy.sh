@@ -248,6 +248,7 @@ properties = {
         "org.postgresql.Driver",
     "javax.jdo.option.ConnectionUserName": "hive",
     "javax.jdo.option.ConnectionPassword": password,
+    "datanucleus.connectionPool.maxPoolSize": "5",
     "hive.metastore.warehouse.dir":
         "/user/hive/warehouse",
     "hive.metastore.schema.verification": "true",
