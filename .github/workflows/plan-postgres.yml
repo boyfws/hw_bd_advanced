@@ -1,5 +1,5 @@
 
-name: Plan PostgreSQL Installation
+name: Install PostgreSQL for Hive
 
 on:
   workflow_dispatch:
@@ -12,9 +12,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  plan:
+  install:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
+
     steps:
       - name: Prepare SSH
         env:
@@ -22,34 +23,81 @@ jobs:
           KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.ssh"
-          chmod 700 "$HOME/.ssh"
           test -n "$PRIVATE_KEY"
           test -n "$KNOWN_HOSTS"
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
           chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
 
-      - name: Simulate installation
+      - name: Install PostgreSQL and check Hadoop
         run: |
           ssh -i "$HOME/.ssh/private_key" \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
             team@171.22.72.225 'bash -se' <<'EDGE'
           set -euo pipefail
 
           ssh -i "$HOME/.ssh/team_internal" \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=10 \
             team@team-14-00 'bash -se' <<'REMOTE'
           set -euo pipefail
 
-          echo "=== Hadoop services before installation ==="
-          jps
+          echo "Проверяем сервер"
+          test "$(hostname -s)" = "team-14-00"
+          test "$(whoami)" = "team"
 
-          echo "=== PostgreSQL installation simulation ==="
-          sudo -n apt-get -s install postgresql-16
+          echo "Проверяем Hadoop до установки"
+          jps | grep -E '[[:space:]]DataNode$'
+          jps | grep -E '[[:space:]]NodeManager$'
 
-          echo "=== Simulation complete: no packages installed ==="
+          echo "Проверяем PostgreSQL"
+          if dpkg-query -W -f='${Status}' postgresql-16 \
+            2>/dev/null | grep -q 'install ok installed'; then
+            echo "PostgreSQL 16 уже установлен"
+          else
+            echo "Устанавливаем PostgreSQL 16"
+            sudo -n env DEBIAN_FRONTEND=noninteractive \
+              apt-get install -y --no-install-recommends postgresql-16
+          fi
+
+          echo "Проверяем службу PostgreSQL"
+          psql --version
+          sudo -n systemctl is-active --quiet postgresql
+          sudo -n -u postgres psql -Atqc 'SELECT 1;'
+
+          echo "Ограничиваем потребление ресурсов"
+          sudo -n -u postgres psql -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET shared_buffers = '128MB';"
+          sudo -n -u postgres psql -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET work_mem = '4MB';"
+          sudo -n -u postgres psql -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET max_connections = '30';"
+
+          echo "Применяем настройки PostgreSQL"
+          sudo -n systemctl restart postgresql
+
+          echo "Проверяем PostgreSQL после настройки"
+          sudo -n -u postgres psql -Atqc 'SELECT 1;'
+
+          echo "Проверяем Hadoop после установки"
+          jps | grep -E '[[:space:]]DataNode$'
+          jps | grep -E '[[:space:]]NodeManager$'
+
+          echo "Проверяем оперативную память"
+          free -h
+
+          echo "Проверяем порты"
+          ss -ltn | grep ':5432'
+
+          echo "PostgreSQL установлен, основные процессы Hadoop работают"
           REMOTE
           EDGE
