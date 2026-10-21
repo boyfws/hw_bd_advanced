@@ -28,7 +28,8 @@ jobs:
 
 
 
-      - name: Test Beeline connection
+
+            - name: Diagnose Hive INSERT
         run: |
           ssh -i "$HOME/.ssh/private_key" \
             -o BatchMode=yes \
@@ -36,15 +37,19 @@ jobs:
             team@171.22.72.225 'bash -se' <<'REMOTE'
           set -euo pipefail
 
-          export HADOOP_HOME="/home/team/hadoop-3.5.0"
-          export HIVE_HOME="/home/team/apache-hive-4.1.0-bin"
-          export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
-          export PATH="$HADOOP_HOME/bin:$HIVE_HOME/bin:$PATH"
+          echo "=== QUERY ERRORS ==="
+          grep -Ein -C 6 \
+            '5c94e86e|Caused by:|Exception|FAILED|ERROR|Tez|YarnException' \
+            /tmp/team/hive.log | tail -n 130 || true
 
-          echo "Проверяем подключение к HiveServer2"
+          echo "=== TEZ CONFIGURATION ==="
+          test -f /home/team/apache-tez-0.10.5-bin/conf/tez-site.xml
+          grep -E 'tez.lib.uris|tez.use.cluster.hadoop-libs' \
+            /home/team/apache-tez-0.10.5-bin/conf/tez-site.xml || true
 
-          timeout 90 "$HIVE_HOME/bin/beeline" \
-            -u "jdbc:hive2://127.0.0.1:10000/default" \
-            -e "SHOW DATABASES;"
+          echo "=== YARN APPLICATIONS ==="
+          /home/team/hadoop-3.5.0/bin/yarn application -list \
+            -appStates ALL | tail -n 20
           REMOTE
       
+
