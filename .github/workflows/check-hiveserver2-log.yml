@@ -25,19 +25,30 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
 
-      - name: Read Hive error details
+
+      - name: Read Metastore errors
         run: |
           ssh -i "$HOME/.ssh/private_key" \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
-            team@171.22.72.225 'bash -se' <<'REMOTE'
+            team@171.22.72.225 \
+            'ssh -i ~/.ssh/team_internal -o BatchMode=yes team@team-14-00 bash -se' <<'REMOTE'
           set -euo pipefail
 
-          echo "=== HIVE ERRORS ==="
-          grep -Ein -C 5 \
-            'exception|caused by|failed|error|timeout|refused' \
-            /tmp/team/hive.log | tail -n 100 || true
+          echo "=== METASTORE ERRORS ==="
+          grep -Ein -C 3 \
+            'get_current_notificationEventId|exception|caused by|failed|error|connection|too many' \
+            /home/team/hw3-metastore-restart.log |
+            tail -n 100 || true
 
-          echo "=== LAST LOG LINES ==="
-          tail -n 60 /tmp/team/hive.log
+          echo "=== DATABASE CONNECTIONS ==="
+          sudo -n -u postgres psql -Atqc \
+            "SELECT usename, state, count(*)
+             FROM pg_stat_activity
+             WHERE usename = 'hive'
+             GROUP BY usename, state;"
+
+          echo "=== METASTORE PROCESS ==="
+          jps -l | grep RunJar || true
           REMOTE
+      
