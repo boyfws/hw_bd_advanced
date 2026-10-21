@@ -21,7 +21,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate script
-        run: bash -n hw_3/deploy.sh
+        run: |
+          sed -i 's/\r$//' hw_3/deploy.sh
+          bash -n hw_3/deploy.sh
 
       - name: Prepare SSH
         env:
@@ -82,3 +84,4 @@ jobs:
             -o StrictHostKeyChecking=yes \
             team@171.22.72.225 \
             'rm -f "$HOME/.hive_db_password"' || true
+
