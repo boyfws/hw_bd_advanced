@@ -1,0 +1,84 @@
+
+name: Deploy Hive
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: team-14
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate script
+        run: bash -n hw_3/deploy.sh
+
+      - name: Prepare SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+
+          test -n "$PRIVATE_KEY"
+          test -n "$KNOWN_HOSTS"
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+          chmod 600 "$HOME/.ssh/private_key"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Copy deployment script
+        run: |
+          scp -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            hw_3/deploy.sh \
+            team@171.22.72.225:/home/team/deploy_hive.sh
+
+      - name: Prepare database credential
+        env:
+          HIVE_DB_PASSWORD: ${{ secrets.HIVE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$HIVE_DB_PASSWORD"
+
+          printf '%s' "$HIVE_DB_PASSWORD" |
+            ssh -i "$HOME/.ssh/private_key" \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              team@171.22.72.225 \
+              'umask 077; cat > "$HOME/.hive_db_password"'
+
+      - name: Run deployment checks
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            team@171.22.72.225 \
+            'bash /home/team/deploy_hive.sh'
+
+      - name: Remove temporary credential
+        if: always()
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 \
+            'rm -f "$HOME/.hive_db_password"' || true
