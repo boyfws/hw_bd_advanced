@@ -25,10 +25,38 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
 
-      - name: Read HiveServer2 log
+      - name: Diagnose HiveServer2
         run: |
           ssh -i "$HOME/.ssh/private_key" \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
-            team@171.22.72.225 \
-            'echo "PROCESS"; jps -l | grep -E "HiveServer2|RunJar" || true; echo "PORT"; ss -ltnp | grep ":10000 " || true; echo "MEMORY"; free -h; echo "ERRORS"; grep -Ei "exception|failed|outofmemory|error" /home/team/hw3-hiveserver2.log | tail -n 20 || true'
+            team@171.22.72.225 'bash -se' <<'REMOTE'
+          set -euo pipefail
+
+          echo "=== SYSTEM MEMORY EVENTS ==="
+          sudo -n journalctl -k \
+            --since "2026-10-21 15:40:00" \
+            --no-pager 2>/dev/null |
+            grep -Ei 'oom|out of memory|killed process' |
+            tail -n 20 || true
+
+          echo "=== JAVA PROCESSES ==="
+          jps -lv | grep -E 'HiveServer2|RunJar' || true
+
+          echo "=== PORT 10000 ==="
+          ss -ltnp | grep ':10000 ' || true
+
+          echo "=== MEMORY ==="
+          free -h
+
+          echo "=== HIVE LOG FILES ==="
+          find /home/team/apache-hive-4.1.0-bin \
+            -maxdepth 3 -type f -name '*.log' \
+            -print | head -n 20
+
+          echo "=== HIVE LOG DIRECTORY ==="
+          if [[ -d /tmp/team ]]; then
+            find /tmp/team -maxdepth 3 \
+              -type f -name '*.log' -print | head -n 20
+          fi
+          REMOTE
