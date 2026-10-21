@@ -1,0 +1,13 @@
+transaction_id,customer_id,amount,category,transaction_year
+1,101,1500.50,food,2024
+2,102,3200.00,transport,2024
+3,103,7500.00,shopping,2024
+4,101,2100.00,food,2024
+5,104,12000.00,electronics,2025
+6,102,850.75,transport,2025
+7,105,4300.00,shopping,2025
+8,103,1900.00,food,2025
+9,106,6500.00,electronics,2026
+10,101,2700.00,transport,2026
+11,104,980.00,food,2026
+12,105,5400.00,shopping,2026
