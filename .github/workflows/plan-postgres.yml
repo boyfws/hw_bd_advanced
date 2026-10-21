@@ -1,0 +1,55 @@
+
+name: Plan PostgreSQL Installation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: team-14
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Prepare SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          test -n "$PRIVATE_KEY"
+          test -n "$KNOWN_HOSTS"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
+
+      - name: Simulate installation
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 'bash -se' <<'EDGE'
+          set -euo pipefail
+
+          ssh -i "$HOME/.ssh/team_internal" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            team@team-14-00 'bash -se' <<'REMOTE'
+          set -euo pipefail
+
+          echo "=== Hadoop services before installation ==="
+          jps
+
+          echo "=== PostgreSQL installation simulation ==="
+          sudo -n apt-get -s install postgresql-16
+
+          echo "=== Simulation complete: no packages installed ==="
+          REMOTE
+          EDGE
