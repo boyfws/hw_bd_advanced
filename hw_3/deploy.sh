@@ -1,5 +1,3 @@
-
-
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -47,6 +45,9 @@ jps | grep -E '[[:space:]]NodeManager$'
 
 echo "Проверяем PostgreSQL"
 sudo -n -u postgres psql -Atqc 'SELECT 1;'
+echo "Проверяем журналирование SQL"
+sudo -n -u postgres psql -Atqc 'SHOW log_statement;'
+sudo -n -u postgres psql -Atqc 'SHOW log_min_error_statement;'
 
 echo "Проверяем базу Hive"
 sudo -n -u postgres psql -Atqc \
@@ -63,7 +64,10 @@ df -h /
 
 echo "Удалённый узел готов"
 REMOTE
-
+if [[ "${1:-}" == "--check-only" ]]; then
+    echo "Проверки завершены. Изменения не выполнялись."
+    exit 0
+fi
 echo "Настройка доступа Hive к PostgreSQL"
 
 python3 - "$PASSWORD_FILE" <<'PY' | \
