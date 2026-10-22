@@ -49,10 +49,12 @@ path = sys.argv[1]
 tree = ET.parse(path)
 root = tree.getroot()
 
-settings = {
+ssettings = {
     "hive.execution.engine": "tez",
     "tez.lib.uris": "hdfs:///apps/tez/tez-0.10.5.tar.gz",
     "tez.use.cluster.hadoop-libs": "true",
+    "hive.metastore.notifications.add.thrift.objects": "false",
+    "hive.notification.event.poll.interval": "0s",
 }
 
 for key, value in settings.items():
@@ -76,35 +78,62 @@ PY
 
     echo "Проверяем текущий HiveServer2"
 
-HS2_PIDS="$(
-  jps -lv | awk \
-    '/-Dproc_hiveserver2/ && !/awk/ {print $1}'
-)"
 
-    if ss -ltn | grep -Eq ':10000[[:space:]]'; then
-        if [[ -z "$HS2_PIDS" ]]; then
-            echo "Порт 10000 занят, но процесс HiveServer2 не определён"
-            echo "Перезапуск отменён для безопасности"
+    HS2_PIDS="$(
+      jps -lv | awk \
+        '/-Dproc_hiveserver2/ && !/awk/ {print $1}'
+    )"
+
+    echo "Проверяем существующий HiveServer2"
+
+    PORT_PID="$(
+      ss -ltnp | sed -n \
+        '/:10000[[:space:]]/s/.*pid=\([0-9]*\).*/\1/p' \
+        | head -n 1
+    )"
+
+    if [[ -n "$PORT_PID" ]]; then
+        if ! printf '%s\n' "$HS2_PIDS" | grep -qx "$PORT_PID"; then
+            echo "Порт 10000 занят неизвестным процессом"
             exit 1
         fi
+    fi
 
-        echo "Останавливаем только HiveServer2: $HS2_PIDS"
+    if [[ -n "$HS2_PIDS" ]]; then
+        echo "Останавливаем HiveServer2: $HS2_PIDS"
+
         for pid in $HS2_PIDS; do
             kill -TERM "$pid"
         done
 
         for attempt in $(seq 1 30); do
-            if ! ss -ltn | grep -Eq ':10000[[:space:]]'; then
+            REMAINING=0
+            for pid in $HS2_PIDS; do
+                if kill -0 "$pid" 2>/dev/null; then
+                    REMAINING=1
+                fi
+            done
+
+            if [[ "$REMAINING" -eq 0 ]] &&
+               ! ss -ltn | grep -Eq ':10000[[:space:]]'; then
                 break
             fi
+
             sleep 2
         done
 
-        if ss -ltn | grep -Eq ':10000[[:space:]]'; then
-            echo "HiveServer2 не освободил порт 10000"
-            echo "Принудительная остановка не выполняется"
-            exit 1
-        fi
+        for pid in $HS2_PIDS; do
+            if kill -0 "$pid" 2>/dev/null; then
+                echo "HiveServer2 PID $pid не завершился"
+                echo "Принудительная остановка запрещена"
+                exit 1
+            fi
+        done
+    fi
+
+    if ss -ltn | grep -Eq ':10000[[:space:]]'; then
+        echo "Порт 10000 всё ещё занят"
+        exit 1
     fi
 
     echo "Запускаем HiveServer2 с Tez"
@@ -373,6 +402,8 @@ properties = {
     "javax.jdo.option.ConnectionUserName": "hive",
     "javax.jdo.option.ConnectionPassword": password,
     "datanucleus.connectionPool.maxPoolSize": "5",
+    "hive.metastore.event.db.notification.api.auth": "false",
+    "hive.metastore.event.db.notification.api.auth": "false",
     "hive.metastore.warehouse.dir":
         "/user/hive/warehouse",
     "hive.metastore.schema.verification": "true",
