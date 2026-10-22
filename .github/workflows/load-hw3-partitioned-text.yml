@@ -1,0 +1,120 @@
+
+name: Load HW3 Partitioned Text
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  load:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Prepare SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$PRIVATE_KEY"
+          test -n "$KNOWN_HOSTS"
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
+
+      - name: Load partitioned data
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 'bash -se' <<'REMOTE'
+          set -euo pipefail
+
+          export HADOOP_HOME=/home/team/hadoop-3.5.0
+          export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
+          export HIVE_HOME=/home/team/apache-hive-4.1.0-bin
+
+          HDFS="$HADOOP_HOME/bin/hdfs"
+          BASE="/user/team/hw3/transactions_partitioned_text"
+          TMP="$(mktemp -d)"
+          trap 'rm -rf "$TMP"' EXIT
+
+          echo "Reading original CSV"
+          "$HDFS" dfs -cat \
+            /user/team/hw3/raw_transactions/transactions.csv \
+            > "$TMP/source.csv"
+
+          echo "Preparing year partitions"
+          awk -F, -v dir="$TMP" '
+            NR == 1 { next }
+            {
+              gsub(/\r/, "", $5)
+              if ($5 !~ /^(2024|2025|2026)$/) exit 1
+              print $1 "," $2 "," $3 "," $4 \
+                > (dir "/year-" $5 ".csv")
+            }
+          ' "$TMP/source.csv"
+
+          test "$(wc -l < "$TMP/source.csv")" -eq 13
+
+          for year in 2024 2025 2026; do
+            test -f "$TMP/year-$year.csv"
+            test "$(wc -l < "$TMP/year-$year.csv")" -eq 4
+          done
+
+          echo "Uploading data to new HDFS directory"
+          for year in 2024 2025 2026; do
+            DIR="$BASE/transaction_year=$year"
+            "$HDFS" dfs -mkdir -p "$DIR"
+            "$HDFS" dfs -put -f \
+              "$TMP/year-$year.csv" "$DIR/data.csv"
+          done
+
+          echo "Creating partitioned Hive table"
+          cat > "$TMP/create.sql" <<'SQL'
+          CREATE DATABASE IF NOT EXISTS hw3;
+
+          CREATE EXTERNAL TABLE IF NOT EXISTS
+          hw3.transactions_partitioned_text (
+              transaction_id INT,
+              customer_id INT,
+              amount DOUBLE,
+              category STRING
+          )
+          PARTITIONED BY (transaction_year INT)
+          ROW FORMAT DELIMITED
+          FIELDS TERMINATED BY ','
+          STORED AS TEXTFILE
+          LOCATION
+          '/user/team/hw3/transactions_partitioned_text';
+
+          ALTER TABLE hw3.transactions_partitioned_text
+          ADD IF NOT EXISTS
+          PARTITION (transaction_year=2024)
+          PARTITION (transaction_year=2025)
+          PARTITION (transaction_year=2026);
+
+          SHOW PARTITIONS hw3.transactions_partitioned_text;
+
+          SELECT * FROM hw3.transactions_partitioned_text
+          LIMIT 20;
+          SQL
+
+          timeout 120 "$HIVE_HOME/bin/beeline" \
+            -u "jdbc:hive2://127.0.0.1:10000/default" \
+            --force=false \
+            -f "$TMP/create.sql"
+
+          echo "Checking uploaded files"
+          for year in 2024 2025 2026; do
+            "$HDFS" dfs -ls \
+              "$BASE/transaction_year=$year/data.csv"
+          done
+
+          echo "Partitioned loading completed"
+          REMOTE
