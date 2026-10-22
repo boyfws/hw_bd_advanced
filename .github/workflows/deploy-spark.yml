@@ -54,14 +54,11 @@ jobs:
       - name: Передать файлы на edge
         run: |
           tar -czf hw4-upload.tgz hw_4/deploy.sh hw_3/transactions.csv
-          # Путь формируется на runner из числовых run_id/run_attempt.
-          # shellcheck disable=SC2029
           ssh hw4-edge "mkdir -p '$REMOTE_DIR'"
           scp hw4-upload.tgz "hw4-edge:$REMOTE_DIR/upload.tgz"
 
       - name: Выполнить задание и проверить Hive
         run: |
-          # shellcheck disable=SC2029
           ssh hw4-edge "cd '$REMOTE_DIR' && tar -xzf upload.tgz && bash hw_4/deploy.sh"
 
       - name: Получить отчёты, в том числе при ошибке
