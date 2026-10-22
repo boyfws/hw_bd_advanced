@@ -32,7 +32,8 @@ jobs:
 
       
      
-      - name: Diagnose HiveServer2 startup
+   
+      - name: Test two simultaneous clients
         run: |
           ssh -i "$HOME/.ssh/private_key" \
             -o BatchMode=yes \
@@ -40,20 +41,30 @@ jobs:
             team@171.22.72.225 'bash -se' <<'REMOTE'
           set -euo pipefail
 
-          echo "=== PROCESS ==="
-          ps -p 336554 -o pid,etime,%cpu,%mem,stat,args \
-            | cut -c 1-200 || true
+          export HADOOP_HOME=/home/team/hadoop-3.5.0
+          export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
+          export HIVE_HOME=/home/team/apache-hive-4.1.0-bin
 
-          echo "=== PORT ==="
-          ss -ltnp | grep ':10000' || true
+          for i in 1 2; do
+            timeout 90 "$HIVE_HOME/bin/beeline" \
+              -u "jdbc:hive2://127.0.0.1:10000/default" \
+              -e "SHOW DATABASES;" \
+              > "/tmp/hw3-client-$i.log" 2>&1 &
+            pids[$i]=$!
+          done
 
-          echo "=== SERVER LOG ==="
-          tail -n 100 /tmp/team/hive.log \
-            | grep -Ei -C 3 \
-              'ERROR|Exception|Caused by|Tez|failed|retry|session' \
-            | tail -n 75 || true
+          result=0
 
-          echo "=== STARTUP LOG ==="
-          tail -n 60 /home/team/hw3-hiveserver2.log
+          for i in 1 2; do
+            if wait "${pids[$i]}"; then
+              echo "CLIENT $i: SUCCESS"
+              grep 'hw3' "/tmp/hw3-client-$i.log"
+            else
+              echo "CLIENT $i: FAILED"
+              tail -n 20 "/tmp/hw3-client-$i.log"
+              result=1
+            fi
+          done
+
+          exit "$result"
           REMOTE
-
