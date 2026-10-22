@@ -9,18 +9,18 @@ TEZ_ARCHIVE="/home/team/hw3-downloads/apache-tez-0.10.5-bin.tar.gz"
 HDFS_TEZ_DIR="/apps/tez"
 HDFS_TEZ_ARCHIVE="$HDFS_TEZ_DIR/tez-0.10.5.tar.gz"
 
-echo "=== Проверяем Tez и Hadoop ==="
+echo "Проверяем Tez и Hadoop"
 
 test "$(hostname -s)" = "team-14-en"
 test -x "$HADOOP_HOME/bin/hdfs"
 test -d "$TEZ_HOME"
 test -s "$TEZ_ARCHIVE"
 
-echo "=== Проверяем HDFS ==="
+echo "Проверяем HDFS"
 
 "$HADOOP_HOME/bin/hdfs" dfs -ls / >/dev/null
 
-echo "=== Подготавливаем каталог Tez в HDFS ==="
+echo "Подготавливаем каталог Tez в HDFS"
 
 "$HADOOP_HOME/bin/hdfs" dfs -mkdir -p "$HDFS_TEZ_DIR"
 
@@ -32,7 +32,7 @@ else
       -put "$TEZ_ARCHIVE" "$HDFS_TEZ_ARCHIVE"
 fi
 
-echo "=== Создаём конфигурацию Tez ==="
+echo "Создаём конфигурацию Tez"
 
 mkdir -p "$TEZ_HOME/conf"
 
@@ -50,7 +50,7 @@ cat > "$TEZ_HOME/conf/tez-site.xml" <<'XML'
 </configuration>
 XML
 
-echo "=== Проверяем результат ==="
+echo "Проверяем результат"
 
 "$HADOOP_HOME/bin/hdfs" dfs -ls "$HDFS_TEZ_ARCHIVE"
 
