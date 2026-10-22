@@ -1,0 +1,53 @@
+
+name: Check HW3 Readiness
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Prepare SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$PRIVATE_KEY"
+          test -n "$KNOWN_HOSTS"
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/private_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/private_key" "$HOME/.ssh/known_hosts"
+
+      - name: Check HDFS and Hive
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 'bash -se' <<'REMOTE'
+          set -euo pipefail
+
+          export HADOOP_HOME=/home/team/hadoop-3.5.0
+          export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop"
+          export HIVE_HOME=/home/team/apache-hive-4.1.0-bin
+
+          echo "Checking HDFS"
+          "$HADOOP_HOME/bin/hdfs" dfs -ls \
+            /user/team/hw3/raw_transactions/transactions.csv
+
+          echo "Checking HiveServer2"
+          timeout 90 "$HIVE_HOME/bin/beeline" \
+            -u "jdbc:hive2://127.0.0.1:10000/default" \
+            --force=false \
+            -e "SHOW DATABASES;"
+
+          echo "Checking completed successfully"
+          REMOTE
