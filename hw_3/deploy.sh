@@ -49,7 +49,7 @@ path = sys.argv[1]
 tree = ET.parse(path)
 root = tree.getroot()
 
-ssettings = {
+settings = {
     "hive.execution.engine": "tez",
     "tez.lib.uris": "hdfs:///apps/tez/tez-0.10.5.tar.gz",
     "tez.use.cluster.hadoop-libs": "true",
