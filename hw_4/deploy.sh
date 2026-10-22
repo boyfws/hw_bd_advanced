@@ -58,8 +58,28 @@ timeout 30 hdfs dfsadmin -report > "$RESULTS/hdfs-report.txt"
 timeout 30 yarn node -list -all > "$RESULTS/yarn-nodes.txt"
 cat "$RESULTS/yarn-nodes.txt"
 
+mkdir -p "$TEMP_DIR/beeline-conf"
+cp -R "$HIVE_HOME/conf/." "$TEMP_DIR/beeline-conf/"
+
+cat > "$TEMP_DIR/beeline-conf/beeline-log4j2.properties" <<'BEELINE_LOG'
+status = WARN
+dest = err
+name = HW4Beeline
+appender.console.type = Console
+appender.console.name = console
+appender.console.target = SYSTEM_ERR
+appender.console.layout.type = PatternLayout
+appender.console.layout.pattern = %d{ISO8601} %-5p %c{1}: %m%n
+rootLogger.level = WARN
+rootLogger.appenderRef.console.ref = console
+BEELINE_LOG
+
 beeline() {
-    HIVE_CONF_DIR="$HIVE_HOME/conf" timeout --kill-after=10s 180 \
+    HIVE_CONF_DIR="$TEMP_DIR/beeline-conf" \
+    HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop" \
+    YARN_CONF_DIR="$HADOOP_HOME/etc/hadoop" \
+    HADOOP_CLASSPATH="$TEMP_DIR/beeline-conf" \
+    timeout --kill-after=10s 180 \
         "$HIVE_HOME/bin/beeline" \
         -u jdbc:hive2://127.0.0.1:10000/default -n team \
         --silent=true --showHeader=false --outputformat=tsv2 --force=false "$@"
