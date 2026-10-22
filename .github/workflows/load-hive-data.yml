@@ -64,6 +64,23 @@ jobs:
             -f /home/team/create_table.sql
           REMOTE
 
+      - name: Prepare Hive JAR directory
+        run: |
+          ssh -i "$HOME/.ssh/private_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            team@171.22.72.225 'bash -se' <<'REMOTE'
+          set -euo pipefail
+
+          HDFS=/home/team/hadoop-3.5.0/bin/hdfs
+
+          "$HDFS" dfs -mkdir -p /user/team/.hiveJars
+          "$HDFS" dfs -chmod 700 /user/team/.hiveJars
+          "$HDFS" dfs -ls -d /user/team/.hiveJars
+
+          echo "Hive JAR directory prepared"
+          REMOTE
+
       - name: Insert partitioned data
         run: |
           ssh -i "$HOME/.ssh/private_key" \
