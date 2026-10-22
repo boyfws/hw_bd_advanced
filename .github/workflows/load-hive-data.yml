@@ -76,6 +76,14 @@ jobs:
 
           "$HDFS" dfs -mkdir -p /user/team/.hiveJars
           "$HDFS" dfs -chmod 700 /user/team/.hiveJars
+          
+          echo "Удаляем незавершенную загрузку Hive JAR"
+
+          "$HDFS" dfs -rm -f \
+            /user/team/.hiveJars/hive-exec-4.1.0-dd03c5d6a4e16ef9a27804915e3a012f3ea690c3710f8575e8c34157d1bf5d08.jar
+
+          echo "Каталог Hive JAR готов"
+
           "$HDFS" dfs -ls -d /user/team/.hiveJars
 
           echo "Hive JAR directory prepared"
