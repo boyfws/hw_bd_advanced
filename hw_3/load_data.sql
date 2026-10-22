@@ -1,4 +1,4 @@
-SET tez.lib.uris.classpath=./*:./lib/*;
+SET hive.execution.engine=mr;
 USE hw3;
 
 CREATE EXTERNAL TABLE IF NOT EXISTS transactions_raw (
