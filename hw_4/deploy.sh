@@ -2,7 +2,6 @@
 set -euo pipefail
 umask 077
 
-# Запускается НА EDGE, а не на runner GitHub Actions.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 export HADOOP_HOME="$HOME/hadoop-3.5.0"
@@ -28,11 +27,10 @@ test -x "$HADOOP_HOME/bin/yarn"
 for command in curl tar sha512sum timeout flock python3; do
     command -v "$command" >/dev/null
 done
-python3 -c 'import sys; assert sys.version_info >= (3, 10), "Нужен Python >= 3.10"'
+python3 -c 'import sys; assert sys.version_info >= (3, 10), "нужен python большей версии"'
 
-# Один ручной запуск и один workflow не должны одновременно перезаписывать таблицу.
 exec 9> "$HOME/.hw4-deploy.lock"
-flock -n 9 || { echo "Другой запуск ДЗ-4 ещё работает" >&2; exit 1; }
+flock -n 9 || { echo "другой запуск дз ещё работает" >&2; exit 1; }
 TEMP_DIR="$(mktemp -d "$HOME/.hw4.XXXXXX")"
 cleanup() {
     local status=$?
@@ -46,16 +44,15 @@ cleanup() {
         fi
     fi
     rm -rf -- "$TEMP_DIR"
-    if [[ $status -ne 0 ]]; then echo "ДЗ-4 завершилось ошибкой ($status). См. results/deploy.log" >&2; fi
+    if [[ $status -ne 0 ]]; then echo "завершилось ошибкой ($status). надо глянуть в results/deploy.log" >&2; fi
     exit "$status"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-# results относится к этому запуску; старый application id нельзя использовать при ошибке.
 rm -f "$RESULTS/application-id.txt" "$RESULTS/spark-report.json" "$RESULTS/hive-report.json"
 
-echo "Проверка существующих HDFS, YARN и Hive"
+echo "проверка существующих hdfs yarn hive"
 timeout 300 hdfs dfsadmin -safemode wait
 timeout 30 hdfs dfsadmin -report > "$RESULTS/hdfs-report.txt"
 timeout 30 yarn node -list -all > "$RESULTS/yarn-nodes.txt"
@@ -69,18 +66,17 @@ beeline() {
 }
 beeline -e 'SHOW DATABASES;' > "$RESULTS/hive-databases.txt"
 
-echo "Подготовка входного CSV в HDFS"
+echo "подготовка csv в hdfs"
 if ! timeout 30 hdfs dfs -test -e "$INPUT"; then
     test -s "$SCRIPT_DIR/../hw_3/transactions.csv"
     timeout 30 hdfs dfs -mkdir -p "$HDFS/user/team/hw3/raw_transactions"
-    # Без -f: существующие исходные данные не перезаписываем.
     timeout 30 hdfs dfs -put "$SCRIPT_DIR/../hw_3/transactions.csv" "$INPUT"
 fi
 timeout 30 hdfs dfs -cat "$INPUT" > "$RESULTS/input.csv"
 test -s "$RESULTS/input.csv"
 timeout 30 hdfs dfs -checksum "$INPUT" > "$RESULTS/input-checksum-before.txt"
 
-echo "Подготовка Spark $SPARK_VERSION"
+echo "подготовка spark $SPARK_VERSION"
 if [[ ! -e "$SPARK_HOME" ]]; then
     archive="spark-$SPARK_VERSION-bin-hadoop3.tgz"
     if ! curl -fL --connect-timeout 15 --max-time 900 --retry 3 \
@@ -97,11 +93,10 @@ if [[ ! -e "$SPARK_HOME" ]]; then
 fi
 test -x "$SPARK_HOME/bin/spark-submit"
 if [[ ! -f "$SPARK_HOME/.hw4-sha512" ]] || [[ "$(cat "$SPARK_HOME/.hw4-sha512")" != "$SPARK_SHA512" ]]; then
-    echo "Spark уже существует, но установлен не этим скриптом. Проверьте каталог $SPARK_HOME" >&2
+    echo "spark существует но чет не так, надо проверить $SPARK_HOME" >&2
     exit 1
 fi
 
-# Не наследуем Tez, пароли PostgreSQL и настройки HiveServer2 в Spark.
 unset HADOOP_CLASSPATH SPARK_DIST_CLASSPATH SPARK_SUBMIT_OPTS PYSPARK_SUBMIT_ARGS
 export SPARK_CONF_DIR="$TEMP_DIR/spark-conf"
 export HIVE_CONF_DIR="$SPARK_CONF_DIR"
@@ -119,9 +114,7 @@ cat > "$SPARK_CONF_DIR/hive-site.xml" <<'XML'
 </configuration>
 XML
 
-# Код Python хранится здесь, временный файл нужен для spark-submit.
 cat > "$TEMP_DIR/spark_job.py" <<'SPARK_PY'
-"""Преобразования выполняются Spark SQL на executors, без Python UDF."""
 
 from pyspark.sql import functions as F
 from pyspark.sql.types import StringType, StructField, StructType
@@ -132,7 +125,6 @@ COLUMNS = ["transaction_id", "customer_id", "amount", "category", "transaction_y
 
 
 def read_transactions(spark, path):
-    # Сначала строки: ошибки преобразования проверяем явно, а не теряем молча.
     schema = StructType([StructField(name, StringType()) for name in COLUMNS])
     raw = (spark.read.schema(schema).option("header", True)
            .option("enforceSchema", False).option("mode", "FAILFAST").csv(path))
@@ -155,13 +147,13 @@ def validate_transactions(df):
     )
     invalid = df.filter(~F.coalesce(valid, F.lit(False))).count()
     if invalid:
-        raise ValueError(f"Некорректных строк: {invalid}; таблица не изменена")
+        raise ValueError(f"некорректных строк следующее количесто: {invalid}, таблица не изменена")
     stats = df.agg(F.count("*").alias("rows"),
                    F.countDistinct("transaction_id").alias("ids")).first()
     if stats.rows == 0:
-        raise ValueError("Входной CSV пуст")
+        raise ValueError("csv пуст")
     if stats.rows != stats.ids:
-        raise ValueError("Повторяются transaction_id")
+        raise ValueError("повторяются transaction_id")
     return stats.rows
 
 
@@ -176,21 +168,16 @@ def summarize(df):
 
 
 def save_summary(spark, summary, table, output_uri):
-    # Повторный запуск может перезаписать только нашу внешнюю таблицу по этому пути.
     if spark.catalog.tableExists(table):
         details = {r.col_name: r.data_type
                    for r in spark.sql(f"DESCRIBE TABLE EXTENDED {table}").collect()}
         if (urlsplit(details.get("Location", "").rstrip("/")) != urlsplit(output_uri.rstrip("/"))
                 or details.get("Type") != "EXTERNAL"
                 or details.get("Provider") != "hive"):
-            raise ValueError(f"{table} существует с другой конфигурацией; остановка")
-    # Hive SerDe + Parquet: таблица читается обычным Hive, а не только Spark.
+            raise ValueError(f"{table} существует с другой конфигурацией")
     (summary.write.mode("overwrite").format("hive")
      .option("fileFormat", "parquet").option("path", output_uri)
      .partitionBy("transaction_year").saveAsTable(table))
-    # При пересоздании EXTERNAL-таблицы Spark оставляет каталоги исчезнувших
-    # партиций. Удаляем только такие каталоги внутри выделенного пути ДЗ-4,
-    # иначе последующий MSCK REPAIR мог бы вернуть старые данные в таблицу.
     live_partitions = {row[0] for row in spark.sql(f"SHOW PARTITIONS {table}").collect()}
     path = spark._jvm.org.apache.hadoop.fs.Path(output_uri)
     fs = path.getFileSystem(spark.sparkContext._jsc.hadoopConfiguration())
@@ -198,10 +185,9 @@ def save_summary(spark, summary, table, output_uri):
         name = status.getPath().getName()
         if status.isDirectory() and re.fullmatch(r"transaction_year=[0-9]+", name) and name not in live_partitions:
             if not fs.delete(status.getPath(), True):
-                raise RuntimeError(f"Не удалось удалить устаревшую партицию: {name}")
+                raise RuntimeError(f"не удалось удалить устаревшую партицию: {name}")
 
 
-"""ДЗ-4: HDFS -> Spark on YARN -> партиционированная Hive-таблица."""
 
 import argparse
 import json
@@ -227,9 +213,9 @@ def main():
     try:
         sc = spark.sparkContext
         if sc.master != "yarn" or not sc.applicationId.startswith("application_"):
-            raise RuntimeError("Задание нужно запускать через spark-submit --master yarn")
+            raise RuntimeError("запускать надо через спарк сабмит мастер ярн")
         if sc._jsc.hadoopConfiguration().get("hive.metastore.uris") != METASTORE:
-            raise RuntimeError("Не настроен общий Hive Metastore; локальный Derby запрещён")
+            raise RuntimeError("не настроен общий хайв метастор")
         print(f"YARN_APPLICATION_ID={sc.applicationId}", flush=True)
         Path(args.application_id_file).write_text(sc.applicationId + "\n")
         df = read_transactions(spark, INPUT).cache()
@@ -241,14 +227,14 @@ def main():
 
         actual = spark.table(TABLE).collect()
         if set(actual) != set(expected):
-            raise RuntimeError("Spark не прочитал записанные данные без изменений")
+            raise RuntimeError("спарк не прочитал данные так как надо")
         partitions = [r[0] for r in spark.sql(f"SHOW PARTITIONS {TABLE}").collect()]
         years = sorted({r.transaction_year for r in expected})
         if sorted(partitions) != [f"transaction_year={year}" for year in years]:
-            raise RuntimeError("Набор партиций не совпал с исходными годами")
+            raise RuntimeError("партиции не совпали с исходными")
         total = df.agg(F.sum("amount")).first()[0]
         if sum(r.transaction_count for r in actual) != input_rows or sum(r.total_amount for r in actual) != total:
-            raise RuntimeError("При агрегации потерялись строки или денежная сумма")
+            raise RuntimeError("при агрегации потерялось что-то")
         report = {
             "application_id": sc.applicationId, "master": sc.master,
             "spark_version": spark.version, "metastore": METASTORE,
@@ -298,7 +284,7 @@ app="$(cat "$RESULTS/application-id.txt")"
 timeout 30 yarn application -status "$app" > "$RESULTS/yarn-status.txt"
 for attempt in {1..12}; do
     if grep -Eq 'Final-State[[:space:]]*:[[:space:]]*SUCCEEDED' "$RESULTS/yarn-status.txt"; then break; fi
-    echo "Ожидаем финальный статус yarn: $attempt/12"
+    echo "jжидаем финальный статус yarn: $attempt/12"
     sleep 5
     timeout 30 yarn application -status "$app" > "$RESULTS/yarn-status.txt"
 done
@@ -348,18 +334,18 @@ def verify(source, beeline_file, partitions_file):
             if not row:
                 continue
             if len(row) != 6:
-                raise ValueError(f"Ожидалось 6 столбцов Beeline, получено {len(row)}")
+                raise ValueError(f"ожидалось 6 столбцов beeline, получено {len(row)}")
             category, count, customers, total, average, year = row
             key = (int(year), category)
             if key in actual:
-                raise ValueError(f"Повторная группа в Hive: {key}")
+                raise ValueError(f"повторная группа в hive: {key}")
             actual[key] = (int(count), int(customers), Decimal(total), Decimal(average))
     if not expected or actual != expected:
-        raise ValueError(f"Результат hive отличается от csv")
+        raise ValueError(f"рзультат hive отличается от csv")
     partitions = [line.strip() for line in Path(partitions_file).read_text().splitlines() if line.strip()]
     wanted = sorted({f"transaction_year={year}" for year, _ in expected})
     if sorted(partitions) != wanted:
-        raise ValueError(f"некорректные партиции hive: {partitions}; ожидалось {wanted}")
+        raise ValueError(f"некорректные партиции hive: {partitions}, ожидалось {wanted}")
     return {"hive_read_verified": True, "groups": len(actual), "partitions": wanted,
             "total_amount": str(sum((row[2] for row in actual.values()), Decimal(0)))}
 
