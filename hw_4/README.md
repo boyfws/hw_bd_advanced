@@ -8,10 +8,10 @@ Spark читает csv-файл из HDFS, преобразует данные �
 
 Используется кластер из предыдущих домашних работ:
 
-1. `team-14-nn`, `10.14.0.11` — NameNode, Secondary NameNode, ResourceManager и JobHistoryServer.
-2. `team-14-en`, `10.14.0.10` — edge-нода, DataNode, NodeManager, HiveServer2 и Spark driver.
-3. `team-14-00`, `10.14.0.12` — DataNode, NodeManager, Hive Metastore и PostgreSQL.
-4. `team-14-01`, `10.14.0.13` — DataNode и NodeManager.
+1. `team-14-nn`, `10.14.0.11` - NameNode, Secondary NameNode, ResourceManager и JobHistoryServer.
+2. `team-14-en`, `10.14.0.10` - edge-нода, DataNode, NodeManager, HiveServer2 и Spark driver.
+3. `team-14-00`, `10.14.0.12` - DataNode, NodeManager, Hive Metastore и PostgreSQL.
+4. `team-14-01`, `10.14.0.13` - DataNode и NodeManager.
 
 Используются Hadoop, Hive, Spark, Java и Python.
 
@@ -65,7 +65,7 @@ spark = SparkSession.builder.appName("hw4-transaction-summary").enableHiveSuppor
 
 ## Чтение и преобразование данных
 
-Spark читает csv из HDFS через `spark.read.csv()`. Идентификаторы и год приводятся к `INT`, сумма — к `DECIMAL(18,2)`. Категории очищаются от пробелов и переводятся в нижний регистр
+Spark читает csv из HDFS через `spark.read.csv()`. Идентификаторы и год приводятся к `INT`, сумма - к `DECIMAL(18,2)`. Категории очищаются от пробелов и переводятся в нижний регистр
 
 Далее данные группируются по году и категории:
 
@@ -107,7 +107,7 @@ SHOW PARTITIONS hw4.transaction_summary;
 
 ## Запуск
 
-1. Открыть Actions -  Spark on YARN - Run workflow.
+1. Открыть Actions -  deploy spark on yarn - Run workflow.
 
 В артефакте находятся `deploy.log`, `spark-report.json`, `yarn-status.txt`, `hive-rows.tsv`, `hive-partitions.txt`, `hive-table.txt` и `hive-report.json`. Успешный результат подтверждают `Final-State: SUCCEEDED` в YARN и `hive_read_verified: true` в отчете Hive.
 

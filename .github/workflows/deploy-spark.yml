@@ -1,4 +1,4 @@
-name: HW4 - Spark on YARN
+name: deploy spark on yarn
 
 on:
   workflow_dispatch:
