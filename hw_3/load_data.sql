@@ -1,4 +1,4 @@
-SET tez.lib.uris.classpath=./apache-tez-0.10.5-bin/*:./apache-tez-0.10.5-bin/lib/*;
+SET tez.lib.uris.classpath=./*:./lib/*;
 USE hw3;
 
 CREATE EXTERNAL TABLE IF NOT EXISTS transactions_raw (
