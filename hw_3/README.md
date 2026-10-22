@@ -8,14 +8,14 @@
 
 Для выполнения задания используется кластер Hadoop, развернутый в предыдущих домашних работах.
 
-1. `team-14-nn`, `10.14.0.11` – NameNode, Secondary NameNode, ResourceManager и JobHistoryServer.
-2. `team-14-en`, `10.14.0.10` – edge-нода, DataNode, NodeManager и HiveServer2.
-3. `team-14-00`, `10.14.0.12` – DataNode, NodeManager, Hive Metastore и PostgreSQL.
+1. `team-14-nn`, `10.14.0.11` - NameNode, Secondary NameNode, ResourceManager и JobHistoryServer.
+2. `team-14-en`, `10.14.0.10` - edge-нода, DataNode, NodeManager и HiveServer2.
+3. `team-14-00`, `10.14.0.12` - DataNode, NodeManager, Hive Metastore и PostgreSQL.
 4. `team-14-01`, `10.14.0.13` – DataNode и NodeManager.
 
 Используются Apache Hadoop 3.5.0, Apache Hive 4.1.0 и PostgreSQL 16.
 
-Hadoop установлен в `$HOME/hadoop-3.5.0`, Hive – в `$HOME/apache-hive-4.1.0-bin`.
+Hadoop установлен в `$HOME/hadoop-3.5.0`, Hive - в `$HOME/apache-hive-4.1.0-bin`.
 
 Вместо рекомендованной версии Hive 4.0.0-alpha2 используется версия 4.1.0.
 
