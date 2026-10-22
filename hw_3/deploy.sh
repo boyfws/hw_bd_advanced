@@ -33,7 +33,8 @@ if [[ "${1:-}" == "--restart-hs2-only" ]]; then
 
     TEZ_JARS="$(
       find "$TEZ_HOME" -type f -name '*.jar' \
-        | paste -sd ':' -
+  ! -name 'hadoop-*.jar' \
+  | paste -sd ':' -
     )"
     test -n "$TEZ_JARS"
 
