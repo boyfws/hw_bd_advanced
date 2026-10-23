@@ -61,7 +61,7 @@ jobs:
         run: |
           ssh hw4-edge "cd '$REMOTE_DIR' && tar -xzf upload.tgz && bash hw_4/deploy.sh"
 
-      - name: Получить отчёты, в том числе при ошибке
+      - name: Получить отчеты, в том числе при ошибке
         if: always()
         run: |
           mkdir -p hw4-results
