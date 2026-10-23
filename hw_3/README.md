@@ -88,7 +88,7 @@ SHOW DATABASES;
 
 После этого сценарий ожидает завершения обоих процессов и проверяет результат выполнения команд.
 
-22 октября 2026 года проверка `Check HiveServer2 Log #14` завершилась успешно.
+ Проверка `Check HiveServer2 Log #14` завершилась успешно.
 
 Оба клиента смогли подключиться к одному экземпляру HiveServer2 и выполнить SQL-запросы.
 
@@ -98,7 +98,7 @@ SHOW DATABASES;
 
 В качестве исходных данных используется файл [transactions.csv](transactions.csv), содержащий 12 записей о транзакциях.
 
-Исходный файл размещен в HDFS по пути:
+Исходный файл размещен в HDFS по пути
 
 ```text
 /user/team/hw3/raw_transactions/transactions.csv
@@ -113,7 +113,7 @@ SHOW DATABASES;
 Исходные данные содержат транзакции за три года:
 
 1. 2024 – 4 записи.
-2. 2025 – 4 записи.
+2. 2025 – 4 записи
 3. 2026 – 4 записи.
 
 При подготовке удаляется заголовок CSV. Поле `transaction_year` используется для распределения записей, а остальные четыре поля сохраняются в отдельных файлах для каждого года.
@@ -242,7 +242,7 @@ transaction_year=2026
 2. [unpack-hive.yml](../.github/workflows/unpack-hive.yml) – распаковка компонентов.
 3. [plan-postgres.yml](../.github/workflows/plan-postgres.yml) – установка и настройка PostgreSQL.
 4. [deploy-hive.yml](../.github/workflows/deploy-hive.yml) – настройка и перезапуск HiveServer2.
-5. [setup-tez.yml](../.github/workflows/setup-tez.yml) – подготовка дополнительного компонента и загрузка исходного CSV в HDFS.
+5. [setup-tez.yml](../.github/workflows/setup-tez.yml) – подготовка дополнительного компонента и загрузка исходного CSV в HDFS
 6. [check-hiveserver2-log.yml](../.github/workflows/check-hiveserver2-log.yml) – проверка параллельных подключений клиентов.
 7. [load-hw3-partitioned-text.yml](../.github/workflows/load-hw3-partitioned-text.yml) – автоматизированная загрузка данных в партиционированную таблицу.
 8. [load-hive-data.yml](../.github/workflows/load-hive-data.yml) – дополнительный сценарий загрузки в формате Parquet.
