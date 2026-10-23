@@ -13,7 +13,7 @@ test -f "$HIVE_HOME/conf/hive-site.xml"
 
 echo "Настраиваем Tez для HiveServer2"
 
-# Создаём конфигурацию в каталоге, используемом Hive.
+ # Создаем конфигурацию в каталоге, используемом Hive
 cp "$TEZ_HOME/conf/tez-site.xml" \
    "$HIVE_HOME/conf/tez-site.xml"
 
