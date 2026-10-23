@@ -39,7 +39,7 @@ echo "Загружаем CSV в HDFS"
     -put -f "$WORK_DIR/transactions.csv" \
     "$HDFS_DATA_DIR/transactions.csv"
 
-echo "Создаём таблицы Hive"
+echo "Создаем таблицы Hive"
 
 "$HIVE_HOME/bin/beeline" \
     -u "jdbc:hive2://localhost:10000/default" \
