@@ -32,7 +32,7 @@ else
       -put "$TEZ_ARCHIVE" "$HDFS_TEZ_ARCHIVE"
 fi
 
-echo "Создаём конфигурацию Tez"
+echo "Создаем конфигурацию Tez"
 
 mkdir -p "$TEZ_HOME/conf"
 
