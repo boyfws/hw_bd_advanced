@@ -89,7 +89,7 @@ jobs:
           sudo -n -u postgres psql -Atqc 'SELECT 1;'
 
           
-          echo "Создаём пользователя и базу Hive"
+          echo "Создаем пользователя и базу Hive"
 
           if ! sudo -n -u postgres psql -Atqc \
             "SELECT 1 FROM pg_roles WHERE rolname='hive'" | grep -qx 1; then
