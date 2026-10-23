@@ -133,7 +133,7 @@ PY
     fi
 
     if ss -ltn | grep -Eq ':10000[[:space:]]'; then
-        echo "Порт 10000 всё ещё занят"
+        echo "Порт 10000 все еще занят"
         exit 1
     fi
 
@@ -182,7 +182,7 @@ echo "Проверка HDFS"
 
 "$HADOOP_HOME/bin/hdfs" dfs -ls / >/dev/null
 
-echo "Проверка удалённого узла"
+echo "Проверка удаленного узла"
 
 ssh -i "$SSH_KEY" \
   -o BatchMode=yes \
@@ -216,7 +216,7 @@ sudo -n -u postgres psql -Atqc \
 echo "Проверяем свободное место"
 df -h /
 
-echo "Удалённый узел готов"
+echo "Удаленный узел готов"
 REMOTE
 if [[ "${1:-}" == "--check-only" ]]; then
     echo "Проверки завершены. Изменения не выполнялись."
@@ -350,7 +350,7 @@ METASTORE_CHECK
 
 echo "Настраиваем Hive Metastore"
 
-# Передаём пароль на сервер Metastore без вывода в журнал
+# Передаем пароль на сервер Metastore без вывода в журнал
 ssh -i "$SSH_KEY" -o BatchMode=yes \
   "team@$REMOTE_HOST" \
   'umask 077; cat > "$HOME/.hw3_metastore_password"' \
@@ -381,7 +381,7 @@ test -x "$HADOOP_HOME/bin/hadoop"
 test -e "$HIVE_HOME/lib/postgresql.jar"
 test -s "$PASSWORD_FILE"
 
-echo "Создаём конфигурацию Metastore"
+echo "Создаем конфигурацию Metastore"
 
 python3 - "$CONFIG_FILE" "$PASSWORD_FILE" <<'PY'
 import sys
